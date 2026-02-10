@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Static Chapel - VR Cathedral Experience</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      overflow: hidden;
+      background: #0a0a12;
+      color: #E0E0E8;
+      font-family: 'Rajdhani', sans-serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    canvas { display: block; }
+
+    /* Loading screen */
+    #loading-screen {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #0a0a12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 1s ease;
+    }
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #loading-screen h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 3rem;
+      color: #8B00FF;
+      text-shadow: 0 0 40px rgba(139, 0, 255, 0.6), 0 0 80px rgba(139, 0, 255, 0.3);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.3em;
+    }
+    #loading-screen h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      color: #FFD700;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.2em;
+    }
+    #loading-screen .subtitle {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.8rem;
+      color: #808090;
+      margin-bottom: 2rem;
+      letter-spacing: 0.1em;
+    }
+    #loading-bar-container {
+      width: 300px;
+      height: 3px;
+      background: #1a1a2e;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #loading-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #6600CC, #8B00FF, #00FFFF);
+      transition: width 0.3s ease;
+    }
+    #loading-text {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: #808090;
+    }
+
+    /* Enter button */
+    #enter-btn {
+      display: none;
+      margin-top: 2rem;
+      padding: 1rem 3rem;
+      font-family: 'Cinzel', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #FFD700;
+      background: transparent;
+      border: 2px solid #FFD700;
+      cursor: pointer;
+      letter-spacing: 0.2em;
+      transition: all 0.3s ease;
+    }
+    #enter-btn:hover {
+      background: rgba(255, 215, 0, 0.1);
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+      transform: scale(1.02);
+    }
+
+    /* VR Button */
+    #vr-button {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      padding: 12px 24px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.85rem;
+      color: #00FFFF;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #00FFFF;
+      cursor: pointer;
+      z-index: 100;
+      display: none;
+      letter-spacing: 0.1em;
+      transition: all 0.3s ease;
+    }
+    #vr-button:hover {
+      background: rgba(0, 255, 255, 0.1);
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+    }
+
+    /* Crosshair */
+    #crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px; height: 20px;
+      pointer-events: none;
+      z-index: 30;
+      display: none;
+    }
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.3);
+    }
+    #crosshair::before {
+      width: 1px; height: 20px;
+      left: 50%; top: 0;
+    }
+    #crosshair::after {
+      width: 20px; height: 1px;
+      left: 0; top: 50%;
+    }
+
+    /* HUD info */
+    #hud-info {
+      position: fixed;
+      top: 15px;
+      left: 20px;
+      z-index: 40;
+      display: none;
+    }
+    #mood-indicator {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.65rem;
+      color: #808090;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+    #fps-counter {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.6rem;
+      color: #404050;
+      margin-top: 4px;
+    }
+
+    /* Player UI */
+    #player-ui {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(10, 10, 18, 0.95));
+      padding: 20px 30px 20px;
+      z-index: 50;
+      display: none;
+    }
+    #track-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 8px;
+    }
+    #track-number {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.7rem;
+      color: #8B00FF;
+      min-width: 28px;
+    }
+    #track-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.1rem;
+      color: #FFD700;
+      flex: 1;
+    }
+    #track-time {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.7rem;
+      color: #808090;
+    }
+    #progress-container {
+      width: 100%;
+      height: 4px;
+      background: #1a1a2e;
+      border-radius: 2px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    #progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #8B00FF, #00FFFF);
+      border-radius: 2px;
+      transition: width 0.1s linear;
+    }
+    #controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+    }
+    .ctrl-btn {
+      background: none;
+      border: none;
+      color: #E0E0E8;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 6px 8px;
+      transition: color 0.2s;
+      font-family: 'Rajdhani', sans-serif;
+    }
+    .ctrl-btn:hover { color: #00FFFF; }
+    .ctrl-btn.active { color: #FFD700; }
+    #play-btn { font-size: 1.5rem; }
+
+    /* Volume slider */
+    #volume-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 20px;
+    }
+    #volume-slider {
+      -webkit-appearance: none;
+      width: 80px;
+      height: 3px;
+      background: #1a1a2e;
+      border-radius: 2px;
+      outline: none;
+    }
+    #volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #8B00FF;
+      cursor: pointer;
+    }
+    #volume-icon {
+      font-size: 0.9rem;
+      color: #808090;
+    }
+
+    /* Track list panel */
+    #tracklist-panel {
+      position: fixed;
+      top: 0;
+      right: -350px;
+      width: 350px;
+      height: 100%;
+      background: rgba(10, 10, 18, 0.97);
+      border-left: 1px solid #1a1a2e;
+      z-index: 200;
+      transition: right 0.3s ease;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    #tracklist-panel.open { right: 0; }
+    #tracklist-panel h3 {
+      font-family: 'Cinzel', serif;
+      color: #8B00FF;
+      margin-bottom: 15px;
+      font-size: 1.2rem;
+      letter-spacing: 0.15em;
+    }
+    .track-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 4px;
+      transition: background 0.2s;
+      font-size: 0.9rem;
+    }
+    .track-item:hover { background: rgba(139, 0, 255, 0.1); }
+    .track-item.active {
+      background: rgba(139, 0, 255, 0.2);
+      color: #FFD700;
+    }
+    .track-item .num {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.65rem;
+      color: #808090;
+      min-width: 24px;
+    }
+    .track-item.active .num { color: #8B00FF; }
+
+    /* Settings panel */
+    #settings-panel {
+      position: fixed;
+      top: 0;
+      left: -320px;
+      width: 320px;
+      height: 100%;
+      background: rgba(10, 10, 18, 0.97);
+      border-right: 1px solid #1a1a2e;
+      z-index: 200;
+      transition: left 0.3s ease;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    #settings-panel.open { left: 0; }
+    #settings-panel h3 {
+      font-family: 'Cinzel', serif;
+      color: #8B00FF;
+      margin-bottom: 20px;
+      font-size: 1.1rem;
+      letter-spacing: 0.15em;
+    }
+    .setting-group {
+      margin-bottom: 20px;
+    }
+    .setting-group label {
+      display: block;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.65rem;
+      color: #808090;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .setting-slider {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: #1a1a2e;
+      border-radius: 2px;
+      outline: none;
+    }
+    .setting-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #8B00FF;
+      cursor: pointer;
+    }
+    .setting-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.6rem;
+      color: #00FFFF;
+      float: right;
+      margin-top: -18px;
+    }
+    .setting-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+    .toggle-switch {
+      width: 36px;
+      height: 18px;
+      background: #1a1a2e;
+      border-radius: 9px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .toggle-switch.on {
+      background: #6600CC;
+    }
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: #E0E0E8;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: left 0.3s;
+    }
+    .toggle-switch.on::after {
+      left: 20px;
+    }
+
+    /* Controls hint */
+    #controls-hint {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.75rem;
+      color: rgba(128, 128, 144, 0.5);
+      z-index: 30;
+      display: none;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0a0a12; }
+    ::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <h1>STATIC CHAPEL</h1>
+      <h2>N3XUSBVSS</h2>
+      <p class="subtitle">A VOID REALITY EXPERIENCE</p>
+      <div id="loading-bar-container">
+        <div id="loading-bar"></div>
+      </div>
+      <p id="loading-text">Initializing...</p>
+      <button id="enter-btn" onclick="window.enterExperience()">ENTER THE CHAPEL</button>
+    </div>
+
+    <!-- Crosshair -->
+    <div id="crosshair"></div>
+
+    <!-- HUD -->
+    <div id="hud-info">
+      <div id="mood-indicator"></div>
+      <div id="fps-counter"></div>
+    </div>
+
+    <!-- VR Button -->
+    <button id="vr-button">ENTER VR</button>
+
+    <!-- Controls hint -->
+    <div id="controls-hint">
+      CLICK TO LOOK AROUND &bull; WASD TO MOVE &bull; SHIFT TO SPRINT &bull; SPACE TO PLAY/PAUSE &bull; ESC TO RELEASE
+    </div>
+
+    <!-- Player UI -->
+    <div id="player-ui">
+      <div id="track-info">
+        <span id="track-number">01</span>
+        <span id="track-title">Static Chapel</span>
+        <span id="track-time">0:00 / 0:00</span>
+      </div>
+      <div id="progress-container">
+        <div id="progress-bar"></div>
+      </div>
+      <div id="controls">
+        <button class="ctrl-btn" id="settings-btn" title="Settings">&#9881;</button>
+        <button class="ctrl-btn" id="prev-btn" title="Previous">&#9664;&#9664;</button>
+        <button class="ctrl-btn" id="play-btn" title="Play">&#9654;</button>
+        <button class="ctrl-btn" id="next-btn" title="Next">&#9654;&#9654;</button>
+        <button class="ctrl-btn" id="shuffle-btn" title="Shuffle">&#8645;</button>
+        <button class="ctrl-btn" id="list-btn" title="Track List">&#9776;</button>
+        <div id="volume-container">
+          <span id="volume-icon">&#128266;</span>
+          <input type="range" id="volume-slider" min="0" max="100" value="80">
+        </div>
+      </div>
+    </div>
+
+    <!-- Track List Panel -->
+    <div id="tracklist-panel">
+      <h3>STATIC CHAPEL</h3>
+      <div id="tracklist"></div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel">
+      <h3>SETTINGS</h3>
+
+      <div class="setting-group">
+        <label>Fog Density</label>
+        <input type="range" class="setting-slider" id="fog-density" min="0" max="100" value="40">
+        <span class="setting-value" id="fog-density-val">40%</span>
+      </div>
+
+      <div class="setting-group">
+        <label>Lighting Intensity</label>
+        <input type="range" class="setting-slider" id="light-intensity" min="0" max="100" value="70">
+        <span class="setting-value" id="light-intensity-val">70%</span>
+      </div>
+
+      <div class="setting-group">
+        <label>Particle Count</label>
+        <input type="range" class="setting-slider" id="particle-count" min="0" max="100" value="60">
+        <span class="setting-value" id="particle-count-val">60%</span>
+      </div>
+
+      <div class="setting-group">
+        <label>Camera FOV</label>
+        <input type="range" class="setting-slider" id="camera-fov" min="50" max="110" value="70">
+        <span class="setting-value" id="camera-fov-val">70</span>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-toggle">
+          <label>God Rays</label>
+          <div class="toggle-switch on" id="toggle-godrays"></div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-toggle">
+          <label>Candle Flames</label>
+          <div class="toggle-switch on" id="toggle-candles"></div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-toggle">
+          <label>Stage Fog</label>
+          <div class="toggle-switch on" id="toggle-stagefog"></div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-toggle">
+          <label>Show FPS</label>
+          <div class="toggle-switch" id="toggle-fps"></div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-toggle">
+          <label>Show Mood</label>
+          <div class="toggle-switch on" id="toggle-mood"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Audio files (WAV - too large for GitHub, ~1.3GB)
+# These need to be hosted separately (e.g., CDN, cloud storage)
+assets/audio/*.wav
+assets/audio/*.mp3
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Claude Code artifacts
+.claude/
+
+# Stray files
+nul
