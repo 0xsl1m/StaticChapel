@@ -62,9 +62,10 @@ function getMats() {
 }
 
 export class ClubDecor {
-  constructor(scene, textures = {}) {
+  constructor(scene, textures = {}, qualityConfig = {}) {
     this.scene = scene;
     this.textures = textures;
+    this.Q = qualityConfig;
     this.group = new THREE.Group();
     this.group.name = 'clubDecor';
 
@@ -131,15 +132,19 @@ export class ClubDecor {
       { y: -0.7, ringR: 1.4, arms: 10, dropLen: 0.35, crystalR: 0.03 },
     ];
 
-    tiers.forEach(tier => {
+    const tierCount = this.Q.chandelierTiers || 3;
+    const armsPerTier = this.Q.chandelierArmsPerTier || 10;
+
+    tiers.slice(0, tierCount).forEach(tier => {
+      const effectiveArms = Math.min(tier.arms, armsPerTier);
       const ringGeo = new THREE.TorusGeometry(tier.ringR, 0.025, 6, 32);
       const ring = new THREE.Mesh(ringGeo, frameMat);
       ring.rotation.x = Math.PI / 2;
       ring.position.y = tier.y;
       g.add(ring);
 
-      for (let a = 0; a < tier.arms; a++) {
-        const angle = (a / tier.arms) * Math.PI * 2;
+      for (let a = 0; a < effectiveArms; a++) {
+        const angle = (a / effectiveArms) * Math.PI * 2;
         const ax = Math.cos(angle) * tier.ringR;
         const az = Math.sin(angle) * tier.ringR;
 
@@ -164,9 +169,10 @@ export class ClubDecor {
         g.add(bead);
       }
 
-      for (let a = 0; a < tier.arms; a += 2) {
-        const angle1 = (a / tier.arms) * Math.PI * 2;
-        const angle2 = ((a + 1) / tier.arms) * Math.PI * 2;
+      if (this.Q.chandelierPendants !== false) {
+      for (let a = 0; a < effectiveArms; a += 2) {
+        const angle1 = (a / effectiveArms) * Math.PI * 2;
+        const angle2 = ((a + 1) / effectiveArms) * Math.PI * 2;
         const midAngle = (angle1 + angle2) / 2;
         const mx = Math.cos(midAngle) * (tier.ringR + 0.15);
         const mz = Math.sin(midAngle) * (tier.ringR + 0.15);
@@ -176,6 +182,7 @@ export class ClubDecor {
         g.add(pend);
         crystals.push(pend);
       }
+      } // end chandelierPendants check
     });
 
     // Central column
@@ -192,18 +199,23 @@ export class ClubDecor {
     g.add(light);
 
     // Secondary uplight — illuminates vault ceiling
-    const uplight = new THREE.PointLight(0xffeedd, 0.6, 22, 1.2);
-    uplight.position.y = 1.0;
-    g.add(uplight);
+    let uplight = null;
+    if ((this.Q.chandelierLightsPerUnit || 3) >= 2) {
+      uplight = new THREE.PointLight(0xffeedd, 0.6, 22, 1.2);
+      uplight.position.y = 1.0;
+      g.add(uplight);
+    }
 
     // Tier accent lights — brighter for crystal sparkle
     const tierLights = [];
-    [0.5, -0.1, -0.7].forEach(ty => {
-      const tLight = new THREE.PointLight(0xfff5e0, 0.5, 12, 1.3);
-      tLight.position.y = ty;
-      g.add(tLight);
-      tierLights.push(tLight);
-    });
+    if ((this.Q.chandelierLightsPerUnit || 3) >= 3) {
+      [0.5, -0.1, -0.7].forEach(ty => {
+        const tLight = new THREE.PointLight(0xfff5e0, 0.5, 12, 1.3);
+        tLight.position.y = ty;
+        g.add(tLight);
+        tierLights.push(tLight);
+      });
+    }
 
     this.group.add(g);
     return { group: g, light, uplight, tierLights, crystals };
@@ -369,6 +381,7 @@ export class ClubDecor {
     lg.add(backPanel);
 
     // Diamond tufting on back
+    if (this.Q.furnitureTufting !== false) {
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 8; c++) {
         const offX = (r % 2 === 1) ? 0.19 : 0;
@@ -379,6 +392,7 @@ export class ClubDecor {
         lg.add(place(new THREE.Mesh(new THREE.SphereGeometry(0.015, 5, 5), M.gold), bx, by, -cushDepth / 2 + 0.14));
       }
     }
+    } // end furnitureTufting check
 
     // Walnut top rail along back
     lg.add(place(new THREE.Mesh(new THREE.BoxGeometry(boothW + 0.02, 0.04, 0.14), M.walnut),
@@ -415,11 +429,13 @@ export class ClubDecor {
     });
 
     // Nailhead trim along bottom of back panel
+    if (this.Q.furnitureTufting !== false) {
     for (let n = 0; n < 24; n++) {
       const nx = -boothW / 2 + 0.18 + n * (boothW - 0.36) / 23;
       lg.add(place(new THREE.Mesh(new THREE.SphereGeometry(0.006, 4, 4), M.brass),
         nx, seatH + 0.08, -cushDepth / 2 + 0.14));
     }
+    } // end furnitureTufting check
 
     // Legs
     [[-boothW / 2 + 0.08, -cushDepth / 2 + 0.08], [-boothW / 2 + 0.08, cushDepth / 2 - 0.08],
@@ -432,6 +448,7 @@ export class ClubDecor {
     this._addPedestalTable(lg, 0, 0, cushDepth / 2 + sideLen * 0.4);
 
     // LED underglow
+    if (this.Q.furnitureUnderglow !== false) {
     const glow = new THREE.Mesh(
       new THREE.PlaneGeometry(boothW - 0.3, cushDepth - 0.2),
       new THREE.MeshBasicMaterial({ color: NEON_PURPLE, transparent: true, opacity: 0.06,
@@ -441,6 +458,7 @@ export class ClubDecor {
     glow.position.y = 0.02;
     lg.add(glow);
     this.underglows.push(glow);
+    } // end furnitureUnderglow check
 
     this.group.add(lg);
   }
@@ -489,6 +507,7 @@ export class ClubDecor {
     lg.add(back);
 
     // Diamond tufting buttons
+    if (this.Q.furnitureTufting !== false) {
     const btnMat = M.gold;
     for (let r = 0; r < 3; r++) {
       for (let c = 0; c < 5; c++) {
@@ -499,6 +518,7 @@ export class ClubDecor {
         lg.add(place(new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 6), btnMat), bx, by, -sofaD / 2 + 0.15));
       }
     }
+    } // end furnitureTufting check
 
     // Rolled arms
     [-1, 1].forEach(side => {
@@ -525,6 +545,7 @@ export class ClubDecor {
     });
 
     // LED underglow
+    if (this.Q.furnitureUnderglow !== false) {
     const glowMat = new THREE.MeshBasicMaterial({
       color: NEON_PURPLE, transparent: true, opacity: 0.07,
       blending: THREE.AdditiveBlending, depthWrite: false,
@@ -534,6 +555,7 @@ export class ClubDecor {
     glow.position.y = 0.02;
     lg.add(glow);
     this.underglows.push(glow);
+    } // end furnitureUnderglow check
 
     // Cocktail table in front
     this._addPedestalTable(lg, 0, 0, 1.0);
@@ -577,6 +599,7 @@ export class ClubDecor {
     lg.add(backPanel);
 
     // Tufting on long back
+    if (this.Q.furnitureTufting !== false) {
     for (let r = 0; r < 3; r++) {
       for (let c = 0; c < 6; c++) {
         const offX = (r % 2 === 1) ? 0.19 : 0;
@@ -585,6 +608,7 @@ export class ClubDecor {
         lg.add(place(new THREE.Mesh(new THREE.SphereGeometry(0.016, 5, 5), M.gold), bx, seatH + 0.2 + r * 0.2, -cushDepth / 2 + 0.14));
       }
     }
+    } // end furnitureTufting check
 
     // === SHORT RETURN SECTION (side) ===
     const returnX = longW / 2 + cushDepth / 2 - 0.06;
@@ -620,6 +644,7 @@ export class ClubDecor {
     });
 
     // Underglow
+    if (this.Q.furnitureUnderglow !== false) {
     const glow = new THREE.Mesh(
       new THREE.PlaneGeometry(longW - 0.2, cushDepth - 0.2),
       new THREE.MeshBasicMaterial({ color: NEON_PURPLE, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false })
@@ -628,6 +653,7 @@ export class ClubDecor {
     glow.position.y = 0.02;
     lg.add(glow);
     this.underglows.push(glow);
+    } // end furnitureUnderglow check
 
     this.group.add(lg);
   }
@@ -666,6 +692,7 @@ export class ClubDecor {
     lg.add(headPanel);
 
     // Channel tufting on headboard
+    if (this.Q.furnitureTufting !== false) {
     for (let ch = 0; ch < 5; ch++) {
       const cz = -dbD / 2 + 0.15 + ch * ((dbD - 0.3) / 4);
       const groove = new THREE.Mesh(
@@ -675,6 +702,7 @@ export class ClubDecor {
       groove.position.set(-dbW / 2 + 0.14, seatH + headH / 2 + 0.05, cz);
       lg.add(groove);
     }
+    } // end furnitureTufting check
 
     // Slim tapered legs (darker brass, splayed)
     [[-dbW / 2 + 0.1, -dbD / 2 + 0.1], [-dbW / 2 + 0.1, dbD / 2 - 0.1],
@@ -690,6 +718,7 @@ export class ClubDecor {
     this._addPedestalTable(lg, dbW / 2 + 0.5, 0, 0);
 
     // Underglow
+    if (this.Q.furnitureUnderglow !== false) {
     const glow = new THREE.Mesh(
       new THREE.PlaneGeometry(dbW - 0.3, dbD - 0.2),
       new THREE.MeshBasicMaterial({ color: NEON_PURPLE, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false })
@@ -698,6 +727,7 @@ export class ClubDecor {
     glow.position.y = 0.02;
     lg.add(glow);
     this.underglows.push(glow);
+    } // end furnitureUnderglow check
 
     this.group.add(lg);
   }
@@ -933,6 +963,7 @@ export class ClubDecor {
     g.add(backMesh);
 
     // Diamond buttons
+    if (this.Q.furnitureTufting !== false) {
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 7; c++) {
         const offX = (r % 2 === 1) ? 0.19 : 0;
@@ -941,15 +972,18 @@ export class ClubDecor {
         g.add(place(new THREE.Mesh(new THREE.SphereGeometry(0.014, 5, 5), M.gold), bx, seatH + 0.18 + r * 0.17, -bD / 2 + 0.13));
       }
     }
+    } // end furnitureTufting check
 
     // Walnut top rail
     g.add(place(new THREE.Mesh(new THREE.BoxGeometry(bW, 0.035, 0.14), M.walnut), 0, seatH + backH + 0.08, -bD / 2 + 0.07));
 
     // Nailhead trim
+    if (this.Q.furnitureTufting !== false) {
     for (let n = 0; n < 22; n++) {
       const nx = -bW / 2 + 0.18 + n * (bW - 0.36) / 21;
       g.add(place(new THREE.Mesh(new THREE.SphereGeometry(0.006, 4, 4), M.brass), nx, seatH + 0.08, -bD / 2 + 0.14));
     }
+    } // end furnitureTufting check
 
     // Legs
     [[-bW / 2 + 0.08, -bD / 2 + 0.08], [-bW / 2 + 0.08, bD / 2 - 0.08],
@@ -969,6 +1003,7 @@ export class ClubDecor {
     });
 
     // Underglow
+    if (this.Q.furnitureUnderglow !== false) {
     const glow = new THREE.Mesh(
       new THREE.PlaneGeometry(bW - 0.3, bD - 0.2),
       new THREE.MeshBasicMaterial({ color: NEON_PURPLE, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false })
@@ -977,6 +1012,7 @@ export class ClubDecor {
     glow.position.set(0, 0.02, 0.04);
     g.add(glow);
     this.underglows.push(glow);
+    } // end furnitureUnderglow check
 
     this.group.add(g);
   }
@@ -1039,6 +1075,7 @@ export class ClubDecor {
     });
 
     // ======== BARTENDER WELL ========
+    if (this.Q.cocktailBarDetail !== 'simple') {
     bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW - 0.4, 0.02, wellDepth - 0.2), M.rubber), 0, 0.01, -barD / 2 - wellDepth / 2));
 
     // Speed rail
@@ -1072,6 +1109,7 @@ export class ClubDecor {
       posScreen.rotation.x = -0.3;
       bar.add(posScreen);
     });
+    } // end cocktailBarDetail !== 'simple' (well, speed rail, bottles, ice, sink, POS)
 
     // ======== BACK BAR ========
     const backBarZ = -barD / 2 - wellDepth;
@@ -1100,6 +1138,7 @@ export class ClubDecor {
     bar.add(place(new THREE.PointLight(0xffeedd, 0.06, 4, 2), 0, backBarH + 0.5, mirrorZ + 0.25));
 
     // Display bottles
+    if (this.Q.cocktailBarDetail !== 'simple') {
     const displayColors = [0x1a4d1a, 0x8b1a1a, 0x1a1a5c, 0xc49a2a, 0x5c1a4a, 0x1a4a5c, 0x3d2b1a, 0x2a1a5c, 0x5c4a1a, 0x1a5c3d, 0x4a1a3d, 0x1a5c5c];
     shelfHeights.forEach((sy, si) => {
       const count = si === 1 ? 16 : 12;
@@ -1126,6 +1165,7 @@ export class ClubDecor {
       });
       bar.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.023, 0.023, h, 6), bodyMat), bx, backBarH + h / 2 + 0.02, backBarZ - backBarD / 2));
     }
+    } // end cocktailBarDetail !== 'simple' (display & work bottles)
 
     // Bar stools
     for (let i = 0; i < 8; i++) {
@@ -1184,6 +1224,7 @@ export class ClubDecor {
   //  ELECTRIC ARCS
   // ==================================================================
   createElectricArcs() {
+    const arcCount = this.Q.electricArcs || 12;
     const spacing = NAVE_LENGTH / 13;
     const columnPairs = [];
     for (let i = 0; i < 12; i++) {
@@ -1191,7 +1232,7 @@ export class ClubDecor {
       columnPairs.push({ x: -NAVE_WIDTH / 2, z, y: 20 }, { x: NAVE_WIDTH / 2, z, y: 20 });
     }
 
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < arcCount; i++) {
       const leftIdx = i * 2, rightIdx = i * 2 + 1;
       if (leftIdx >= columnPairs.length || rightIdx >= columnPairs.length) break;
       const from = columnPairs[leftIdx], to = columnPairs[rightIdx];
@@ -1245,7 +1286,7 @@ export class ClubDecor {
   //  STATIC PARTICLES
   // ==================================================================
   createStaticParticles() {
-    const count = 200;
+    const count = this.Q.staticParticles || 200;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const isNearColumn = Math.random() > 0.35;

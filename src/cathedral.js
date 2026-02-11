@@ -6,9 +6,10 @@
 import * as THREE from 'three';
 
 export class Cathedral {
-  constructor(scene, textures = {}) {
+  constructor(scene, textures = {}, qualityConfig = {}) {
     this.scene = scene;
     this.textures = textures;
+    this.Q = qualityConfig;
     this.group = new THREE.Group();
     this.group.name = 'cathedral';
     this.scene.add(this.group);
@@ -35,13 +36,14 @@ export class Cathedral {
     this.createSideAisles();
     this.createAltarPlatform();
     this.createBasicLighting();
-    this.createGargoyles();
-    this.createWallSconces();
+    if (this.Q.gargoyles !== false) this.createGargoyles();
+    if (this.Q.wallSconces !== false) this.createWallSconces();
   }
 
   createFloor() {
     // Main floor - dark marble with subtle reflections
-    const floorGeo = new THREE.PlaneGeometry(this.totalWidth, this.naveLength, 32, 64);
+    const _floorSegs = this.Q.floorSegments || [32, 64];
+    const floorGeo = new THREE.PlaneGeometry(this.totalWidth, this.naveLength, _floorSegs[0], _floorSegs[1]);
     const floorMatOpts = {
       color: 0xc8bfb4,
       roughness: 0.18,
@@ -68,6 +70,7 @@ export class Cathedral {
     this.group.add(floor);
 
     // === SACRED GEOMETRY FLOOR PATTERN ===
+    if (this.Q.sacredGeometry !== false) {
     const goldMat = new THREE.MeshBasicMaterial({
       color: 0xFFD700, transparent: true, opacity: 0.3,
       side: THREE.DoubleSide, depthWrite: false
@@ -222,8 +225,10 @@ export class Cathedral {
       center.position.set(rx, 0.012, rz);
       this.group.add(center);
     });
+    } // end sacredGeometry
 
     // Subtle tile grid
+    if (this.Q.tileGrid !== false) {
     const tileMat = new THREE.MeshBasicMaterial({
       color: 0x1a1a2e, transparent: true, opacity: 0.2,
       side: THREE.DoubleSide, depthWrite: false
@@ -234,6 +239,7 @@ export class Cathedral {
     for (let z = -this.naveLength / 2; z < this.naveLength / 2; z += 2) {
       this.group.add(this._floorPlane(this.totalWidth, 0.008, tileMat, 0, z));
     }
+    } // end tileGrid
   }
 
   _floorPlane(w, h, mat, x, z) {
@@ -297,6 +303,7 @@ export class Cathedral {
     this.group.add(frontWall);
 
     // Wall buttress details (vertical strips on walls)
+    if (this.Q.buttresses !== false) {
     const buttressMat = new THREE.MeshStandardMaterial({
       color: 0x7d7568, roughness: 0.8, metalness: 0.02,
       map: wallMatOpts.map, normalMap: wallMatOpts.normalMap,
@@ -314,6 +321,7 @@ export class Cathedral {
         this.group.add(buttress);
       }
     }
+    } // end buttresses
 
     // Stained glass windows
     this.createStainedGlass();
@@ -425,9 +433,12 @@ export class Cathedral {
         this.group.add(windowGroup);
 
         // Glow light - colored illumination cast INWARD from windows
-        const light = new THREE.PointLight(color, 0.07, 12);
-        light.position.set(side * (this.totalWidth / 2 - 1.5), windowY, z);
-        this.group.add(light);
+        let light = null;
+        if (this.Q.windowLights !== false) {
+          light = new THREE.PointLight(color, 0.07, 12);
+          light.position.set(side * (this.totalWidth / 2 - 1.5), windowY, z);
+          this.group.add(light);
+        }
 
         this.windows.push({
           group: windowGroup,
@@ -516,6 +527,7 @@ export class Cathedral {
     });
 
     // ======== SECOND RING — 12 smaller circles at double distance ========
+    if (this.Q.roseWindowDetail !== 'simple') {
     const ring2R = 0.85;
     const ring2Dist = flowerR * 2;
     const ring2Colors = [
@@ -539,8 +551,10 @@ export class Cathedral {
         roseGroup.add(ring);
       }
     }
+    } // end second ring (simple mode skip)
 
     // ======== METATRON'S CUBE — lines connecting circle centers ========
+    if (this.Q.roseWindowDetail !== 'simple') {
     const lineMat = new THREE.MeshBasicMaterial({
       color: 0xFFD700, transparent: true, opacity: 0.6,
       side: THREE.DoubleSide, depthWrite: false,
@@ -561,6 +575,7 @@ export class Cathedral {
         roseGroup.add(line);
       }
     }
+    } // end Metatron's cube (simple mode skip)
 
     // ======== 12 RADIAL SPOKES — from center to rim ========
     for (let i = 0; i < 12; i++) {
@@ -574,11 +589,13 @@ export class Cathedral {
     }
 
     // ======== CONCENTRIC TRACERY RINGS ========
+    if (this.Q.roseWindowDetail !== 'simple') {
     [1.0, 2.0, 3.2, 4.0].forEach(r => {
       const traceryRing = new THREE.Mesh(new THREE.RingGeometry(r - 0.025, r + 0.025, 48), traceryMat);
       traceryRing.position.set(0, 0, 0.018);
       roseGroup.add(traceryRing);
     });
+    } // end concentric tracery rings (simple mode skip)
 
     // ======== OUTER PETAL SEGMENTS — colored glass between spokes in outer ring ========
     const petalColors = [
@@ -600,6 +617,7 @@ export class Cathedral {
     }
 
     // ======== CENTRAL SACRED SYMBOL — hexagram (Star of David / Seal of Solomon) ========
+    if (this.Q.roseWindowDetail !== 'simple') {
     const starMat = new THREE.MeshBasicMaterial({
       color: 0xFFD700, transparent: true, opacity: 0.7,
       side: THREE.DoubleSide, depthWrite: false,
@@ -623,6 +641,7 @@ export class Cathedral {
         roseGroup.add(seg);
       }
     });
+    } // end hexagram (simple mode skip)
 
     // Central gemstone
     const gem = new THREE.Mesh(
@@ -696,9 +715,10 @@ export class Cathedral {
     shaft.castShadow = true;
     columnGroup.add(shaft);
 
-    // 8 cluster shafts (engaged columns)
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
+    // Cluster shafts (engaged columns)
+    const clusterCount = this.Q.columnClusterShafts ?? 8;
+    for (let i = 0; i < clusterCount; i++) {
+      const angle = (i / clusterCount) * Math.PI * 2;
       const cr = 0.58;
       const cx = Math.cos(angle) * cr;
       const cz = Math.sin(angle) * cr;
@@ -777,6 +797,8 @@ export class Cathedral {
     const archWidth = this.naveWidth;
     const archHeight = 6;
     const archY = this.naveHeight - 2;
+    const _archTubularSegs = this.Q.archSegments || 24;
+    const _archRadialSegs = this.Q.archRadialSegments || 6;
 
     // Transverse arches between column pairs
     for (let i = 0; i < this.columnCount; i++) {
@@ -793,7 +815,7 @@ export class Cathedral {
         archPoints.push(new THREE.Vector3(x, y, z));
       }
       const curve = new THREE.CatmullRomCurve3(archPoints);
-      const tubeGeo = new THREE.TubeGeometry(curve, 24, 0.12, 6, false);
+      const tubeGeo = new THREE.TubeGeometry(curve, _archTubularSegs, 0.12, _archRadialSegs, false);
       const arch = new THREE.Mesh(tubeGeo, archMat);
       this.group.add(arch);
     }
@@ -817,7 +839,7 @@ export class Cathedral {
           archPoints.push(new THREE.Vector3(x, y, z));
         }
         const curve = new THREE.CatmullRomCurve3(archPoints);
-        const tubeGeo = new THREE.TubeGeometry(curve, 16, 0.08, 5, false);
+        const tubeGeo = new THREE.TubeGeometry(curve, _archTubularSegs, 0.08, _archRadialSegs, false);
         const arch = new THREE.Mesh(tubeGeo, archMat);
         this.group.add(arch);
       }
@@ -1148,11 +1170,11 @@ export class Cathedral {
 
   createBasicLighting() {
     // Ambient — warm fill so architecture and furniture are visible
-    const ambient = new THREE.AmbientLight(0x887766, 0.8);
+    const ambient = new THREE.AmbientLight(0x887766, this.Q.ambientIntensity || 0.25);
     this.group.add(ambient);
 
     // Hemisphere light — natural fill, warm below / cool above
-    const hemi = new THREE.HemisphereLight(0x8899aa, 0x443322, 0.55);
+    const hemi = new THREE.HemisphereLight(0x8899aa, 0x443322, this.Q.hemisphereIntensity || 0.2);
     this.group.add(hemi);
 
     // Main directional (moonlight through windows) — reduced
@@ -1179,13 +1201,14 @@ export class Cathedral {
     dirLight3.position.set(0, 15, -25);
     this.group.add(dirLight3);
 
-    // Nave fill lights — drastically reduced, keep only 5 key positions
+    // Nave fill lights — drastically reduced, keep only key positions
     const naveFillColor = 0x998877;
     const naveFillPositions = [
       [0, 28, -20], [0, 28, 0], [0, 28, 15],
       [-7, 12, -10], [7, 12, -10],
     ];
-    naveFillPositions.forEach(([fx, fy, fz]) => {
+    const naveLightCount = this.Q.naveFillLights ?? 5;
+    naveFillPositions.slice(0, naveLightCount).forEach(([fx, fy, fz]) => {
       const fill = new THREE.PointLight(naveFillColor, 0.15, 35, 1.5);
       fill.position.set(fx, fy, fz);
       this.group.add(fill);
@@ -1221,7 +1244,7 @@ export class Cathedral {
       for (const panel of win.panels) {
         panel.material.opacity = intensity;
       }
-      win.light.intensity = 0.07 + shift * 0.02;
+      if (win.light) win.light.intensity = 0.07 + shift * 0.02;
     }
 
     // Rose window slow rotation

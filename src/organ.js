@@ -47,9 +47,10 @@ export class PipeOrgan {
    * @param {THREE.Scene} scene
    * @param {Object} [textures] - { wood, metal } from TextureGenerator
    */
-  constructor(scene, textures = {}) {
+  constructor(scene, textures = {}, qualityConfig = {}) {
     this.scene = scene;
     this.textures = textures;
+    this.Q = qualityConfig;
     this.group = new THREE.Group();
     this.group.name = 'pipeOrgan';
 
@@ -184,7 +185,10 @@ export class PipeOrgan {
 
     const totalWidth = 12; // horizontal spread for pipes
 
-    rows.forEach(row => {
+    const maxRows = this.Q.maxPipeRows || 5;
+    const pipeRadSeg = this.Q.pipeRadialSegments || 8;
+
+    rows.slice(0, maxRows).forEach(row => {
       for (let i = 0; i < row.count; i++) {
         const t = row.count === 1 ? 0.5 : i / (row.count - 1); // 0..1
 
@@ -196,7 +200,7 @@ export class PipeOrgan {
         const radius = THREE.MathUtils.lerp(row.minR, row.maxR, edgeFactor);
 
         // Pipe body
-        const pipeGeo = new THREE.CylinderGeometry(radius, radius, height, 8);
+        const pipeGeo = new THREE.CylinderGeometry(radius, radius, height, pipeRadSeg);
         const pipeMat = metalMat.clone();
         const pipeMesh = new THREE.Mesh(pipeGeo, pipeMat);
 
@@ -209,7 +213,7 @@ export class PipeOrgan {
         this.group.add(pipeMesh);
 
         // Gold flare at the top of each pipe
-        const flareGeo = new THREE.CylinderGeometry(radius * 1.5, radius, radius * 2, 8);
+        const flareGeo = new THREE.CylinderGeometry(radius * 1.5, radius, radius * 2, pipeRadSeg);
         const flareMat = goldAccentMat.clone();
         const flareMesh = new THREE.Mesh(flareGeo, flareMat);
         flareMesh.position.set(x, row.y + height + radius, z);

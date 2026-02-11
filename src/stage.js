@@ -24,10 +24,12 @@ export class ConcertStage {
   /**
    * @param {THREE.Scene} scene
    * @param {Object} [textures] - { metal } from TextureGenerator
+   * @param {Object} [qualityConfig] - adaptive quality settings for mobile/Quest 3
    */
-  constructor(scene, textures = {}) {
+  constructor(scene, textures = {}, qualityConfig = {}) {
     this.scene = scene;
     this.textures = textures;
+    this.Q = qualityConfig;
     this.group = new THREE.Group();
     this.group.name = 'concertStage';
 
@@ -63,7 +65,9 @@ export class ConcertStage {
     this.createLEDWall();
     this.createTrusses();
     this.createLightFixtures();
-    this.createFogMachines();
+    if (this.Q.fogMachines !== false) {
+      this.createFogMachines();
+    }
   }
 
   // ==================================================================
@@ -71,7 +75,10 @@ export class ConcertStage {
   //  Center screen + angled wing panels that don't block the organ
   // ==================================================================
   createLEDWall() {
-    const canvasRes = 128;
+    const canvasRes = this.Q.ledCanvasRes || 128;
+    const maxPanels = this.Q.ledPanelCount || 9;
+    this._ledUpdateInterval = this.Q.ledUpdateInterval || 1;
+    let panelCount = 0;
     const panelZ = STAGE_BACK_Z - 3.0; // z=26, pulled forward to prevent wall clipping
 
     const frameMat = new THREE.MeshStandardMaterial({
@@ -80,6 +87,9 @@ export class ConcertStage {
 
     // Helper: create one LED panel with canvas + frame
     const makePanel = (w, h, x, y, z, rotY, col, row) => {
+      if (panelCount >= maxPanels) return;
+      panelCount++;
+
       const canvas = document.createElement('canvas');
       canvas.width = canvasRes;
       canvas.height = canvasRes;
@@ -108,42 +118,44 @@ export class ConcertStage {
       this.ledPanels.push({ canvas, ctx, texture, mesh: panelMesh, col, row });
     };
 
-    // --- CENTER SCREEN: 6m wide × 4m tall ---
+    // --- CENTER SCREEN: 6m wide × 4m tall --- (priority 1: center)
     // Sits low, organ pipes rise above it
     makePanel(6, 4, 0, STAGE_Y + 2.5, panelZ, 0, 1, 0);
 
-    // --- UPPER WING PANELS: 2 per side, angled outward ---
+    // --- UPPER WING PANELS: 2 per side, angled outward --- (priority 2: inner wings)
     // These fan out from the center screen, creating a V-shape
     const upperW = 3.0;
     const upperH = 3.0;
     const upperY = STAGE_Y + 7.5; // above center screen
     const upperAngle = 0.5; // ~30 degrees outward
 
+    // --- LOWER WING PANELS: 2 per side, flanking center screen --- (priority 2: inner wings)
+    const lowerW = 2.5;
+    const lowerH = 2.5;
+    const lowerY = STAGE_Y + 3.0;
+    const lowerAngle = 0.7; // ~40 degrees outward
+
+    // Inner wings (upper + lower) — priority 2
     [-1, 1].forEach(side => {
       // Inner upper wing
       makePanel(upperW, upperH,
         side * 4.5, upperY, panelZ + 0.3,
         side * upperAngle,
         side > 0 ? 2 : 0, 1);
-      // Outer upper wing (more angled)
-      makePanel(upperW * 0.8, upperH * 0.8,
-        side * 7.5, upperY - 0.5, panelZ + 1.0,
-        side * (upperAngle + 0.3),
-        side > 0 ? 2 : 0, 2);
-    });
-
-    // --- LOWER WING PANELS: 2 per side, flanking center screen ---
-    const lowerW = 2.5;
-    const lowerH = 2.5;
-    const lowerY = STAGE_Y + 3.0;
-    const lowerAngle = 0.7; // ~40 degrees outward
-
-    [-1, 1].forEach(side => {
       // Inner lower wing
       makePanel(lowerW, lowerH,
         side * 4.5, lowerY, panelZ + 0.2,
         side * lowerAngle,
         side > 0 ? 2 : 0, 3);
+    });
+
+    // Outer wings (upper + lower) — priority 3
+    [-1, 1].forEach(side => {
+      // Outer upper wing (more angled)
+      makePanel(upperW * 0.8, upperH * 0.8,
+        side * 7.5, upperY - 0.5, panelZ + 1.0,
+        side * (upperAngle + 0.3),
+        side > 0 ? 2 : 0, 2);
       // Outer lower wing
       makePanel(lowerW * 0.7, lowerH * 0.7,
         side * 7.0, lowerY - 0.3, panelZ + 0.8,
@@ -375,23 +387,25 @@ export class ConcertStage {
 
     fixtureGroup.add(headGroup);
 
-    // Small LED info screen on the yoke
-    const screenCanvas = document.createElement('canvas');
-    screenCanvas.width = 64;
-    screenCanvas.height = 32;
-    const screenCtx = screenCanvas.getContext('2d');
-    screenCtx.fillStyle = '#050510';
-    screenCtx.fillRect(0, 0, 64, 32);
-    const screenTex = new THREE.CanvasTexture(screenCanvas);
-    screenTex.minFilter = THREE.LinearFilter;
-    const screenMat = new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false });
-    const screenGeo = new THREE.PlaneGeometry(0.14, 0.07);
-    const screenMesh = new THREE.Mesh(screenGeo, screenMat);
-    screenMesh.position.set(0, 0.06, 0);
-    screenMesh.rotation.x = -Math.PI / 4;
-    fixtureGroup.add(screenMesh);
+    // Small LED info screen on the yoke (optional — disabled on low quality)
+    if (this.Q.fixtureScreens !== false) {
+      const screenCanvas = document.createElement('canvas');
+      screenCanvas.width = 64;
+      screenCanvas.height = 32;
+      const screenCtx = screenCanvas.getContext('2d');
+      screenCtx.fillStyle = '#050510';
+      screenCtx.fillRect(0, 0, 64, 32);
+      const screenTex = new THREE.CanvasTexture(screenCanvas);
+      screenTex.minFilter = THREE.LinearFilter;
+      const screenMat = new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false });
+      const screenGeo = new THREE.PlaneGeometry(0.14, 0.07);
+      const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+      screenMesh.position.set(0, 0.06, 0);
+      screenMesh.rotation.x = -Math.PI / 4;
+      fixtureGroup.add(screenMesh);
 
-    this.fixtureScreens.push({ canvas: screenCanvas, ctx: screenCtx, texture: screenTex });
+      this.fixtureScreens.push({ canvas: screenCanvas, ctx: screenCtx, texture: screenTex });
+    }
 
     this.group.add(fixtureGroup);
 
@@ -416,20 +430,24 @@ export class ConcertStage {
     const beam = new THREE.Mesh(beamGeo, beamMat);
     this.scene.add(beam);
 
-    // Inner bright core beam
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xFFFFFF,
-      transparent: true,
-      opacity: 0.04,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const coreGeo = new THREE.ConeGeometry(1.0, 1.0, 12, 1, true);
-    coreGeo.rotateZ(Math.PI);
-    coreGeo.translate(0, 0.5, 0);
-    const core = new THREE.Mesh(coreGeo, coreMat);
-    this.scene.add(core);
+    // Inner bright core beam (optional — disabled on low quality)
+    let core = null;
+    let coreMat = null;
+    if (this.Q.beamCoreEnabled !== false) {
+      coreMat = new THREE.MeshBasicMaterial({
+        color: 0xFFFFFF,
+        transparent: true,
+        opacity: 0.04,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const coreGeo = new THREE.ConeGeometry(1.0, 1.0, 12, 1, true);
+      coreGeo.rotateZ(Math.PI);
+      coreGeo.translate(0, 0.5, 0);
+      core = new THREE.Mesh(coreGeo, coreMat);
+      this.scene.add(core);
+    }
 
     this.fixtures.push({
       group: fixtureGroup,
@@ -509,6 +527,10 @@ export class ConcertStage {
   //  LED Panel animation — 6 distinct programs, cycling every ~12 seconds
   // ------------------------------------------------------------------
   updateLEDPanels(time, bandValues, energy) {
+    // Frame-skip for adaptive quality (interval=1 means every frame, 2 means every other, etc.)
+    this._ledFrame = (this._ledFrame || 0) + 1;
+    if (this._ledFrame % (this._ledUpdateInterval || 1) !== 0) return;
+
     const bass = bandValues.bass || 0;
     const mid = bandValues.mid || 0;
     const highMid = bandValues.highMid || 0;
@@ -870,7 +892,7 @@ export class ConcertStage {
 
       // Beam starts at fixture head position
       fixture.beam.position.set(fx, fy, fz);
-      fixture.core.position.set(fx, fy, fz);
+      if (fixture.core) fixture.core.position.set(fx, fy, fz);
 
       if (dist > 0.5) {
         // Direction from fixture to target
@@ -880,7 +902,7 @@ export class ConcertStage {
         // so we need to rotate so that local +Y aligns with _dir
         // Use quaternion: rotate from (0,1,0) to _dir
         fixture.beam.quaternion.setFromUnitVectors(_up, _dir);
-        fixture.core.quaternion.setFromUnitVectors(_up, _dir);
+        if (fixture.core) fixture.core.quaternion.setFromUnitVectors(_up, _dir);
 
         // Scale: cone base radius grows with distance (simulating beam spread)
         // SpotLight angle is ~PI/6 (30°), so spread radius = dist * tan(angle)
@@ -890,7 +912,7 @@ export class ConcertStage {
         const coreRadius = dist * Math.tan(coreAngle);
 
         fixture.beam.scale.set(beamRadius, dist, beamRadius);
-        fixture.core.scale.set(coreRadius, dist, coreRadius);
+        if (fixture.core) fixture.core.scale.set(coreRadius, dist, coreRadius);
       }
 
       // Beam color and opacity — capped low to prevent additive washout
@@ -898,8 +920,10 @@ export class ConcertStage {
       fixture.beamMat.opacity = normalizedIntensity > 0.01 ? 0.02 + normalizedIntensity * 0.08 : 0;
 
       // Core beam - white-tinted version for bright center
-      fixture.coreMat.color.lerpColors(lightColor, _white, 0.6);
-      fixture.coreMat.opacity = normalizedIntensity > 0.01 ? 0.008 + normalizedIntensity * 0.035 : 0;
+      if (fixture.coreMat) {
+        fixture.coreMat.color.lerpColors(lightColor, _white, 0.6);
+        fixture.coreMat.opacity = normalizedIntensity > 0.01 ? 0.008 + normalizedIntensity * 0.035 : 0;
+      }
 
       // Lens emissive glow
       fixture.lensMat.emissive.copy(lightColor);
@@ -907,7 +931,7 @@ export class ConcertStage {
 
       // Hide beams when intensity is zero
       fixture.beam.visible = lightIntensity > 0.05;
-      fixture.core.visible = lightIntensity > 0.05;
+      if (fixture.core) fixture.core.visible = lightIntensity > 0.05;
     }
   }
 
@@ -970,11 +994,13 @@ export class ConcertStage {
     // Remove beam/core cones from scene (they're scene children, not group children)
     this.fixtures.forEach(f => {
       this.scene.remove(f.beam);
-      this.scene.remove(f.core);
       f.beam.geometry.dispose();
       f.beam.material.dispose();
-      f.core.geometry.dispose();
-      f.core.material.dispose();
+      if (f.core) {
+        this.scene.remove(f.core);
+        f.core.geometry.dispose();
+        f.core.material.dispose();
+      }
     });
 
     this.group.traverse(child => {

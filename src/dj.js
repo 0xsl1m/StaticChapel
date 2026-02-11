@@ -25,9 +25,10 @@ export class DJBooth {
    * @param {THREE.Scene} scene
    * @param {Object} [textures] - { stone, fabric } from TextureGenerator
    */
-  constructor(scene, textures = {}) {
+  constructor(scene, textures = {}, qualityConfig = {}) {
     this.scene = scene;
     this.textures = textures;
+    this.Q = qualityConfig;
     this.group = new THREE.Group();
     this.group.name = 'djBooth';
 
@@ -577,9 +578,11 @@ export class DJBooth {
     this.beatImpact *= 0.9; // fast decay
 
     this.updateAvatarAnimation(time, energy);
-    this.updateLaptopScreen(time, energy);
-    this.updateCDJScreens(time, energy);
-    this.updateFacade(time, energy);
+    if (this.Q.djScreenUpdates !== false) {
+      this.updateLaptopScreen(time, energy);
+      this.updateCDJScreens(time, energy);
+      this.updateFacade(time, energy);
+    }
   }
 
   // ------------------------------------------------------------------

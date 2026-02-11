@@ -1,8 +1,12 @@
 /**
  * Static Chapel VR - Main Entry Point
  * All Phases: Cathedral, Stage, Organ, DJ, Lighting, VFX, UI
+ *
+ * Performance: QualityManager auto-detects device tier (low/medium/high)
+ * and passes config to all subsystems for adaptive quality.
  */
 import * as THREE from 'three';
+import { quality } from './utils/QualityManager.js';
 import { Cathedral } from './cathedral.js';
 import { PipeOrgan } from './organ.js';
 import { ConcertStage } from './stage.js';
@@ -13,7 +17,6 @@ import { PlaylistManager } from './audio/PlaylistManager.js';
 import { LightingDirector } from './lighting/LightingDirector.js';
 import { Controls } from './utils/Controls.js';
 import { XRManager } from './utils/XRManager.js';
-// DustMotes removed — eliminated to reduce load time
 import { CandleSystem } from './vfx/CandleSystem.js';
 import { FogSystem } from './vfx/FogSystem.js';
 import { GodRays } from './vfx/GodRays.js';
@@ -22,6 +25,8 @@ import { PlayerUI } from './ui/PlayerUI.js';
 import { SettingsPanel } from './ui/SettingsPanel.js';
 import { TextureGenerator } from './utils/TextureGenerator.js';
 import { ClubDecor } from './club-decor.js';
+
+const Q = quality.config; // shorthand for quality config
 
 // --- Globals ---
 let renderer, scene, camera, clock;
@@ -32,6 +37,7 @@ let candles, fogSystem, godRays, postProcessing;
 let playerUI, settingsPanel;
 let isInitialized = false;
 let elapsedTime = 0;
+let frameCount = 0; // for throttled updates
 
 // Settings state
 let settings = {
@@ -60,17 +66,19 @@ function updateLoading(progress, text) {
 async function init() {
   updateLoading(5, 'Creating renderer...');
 
-  // Renderer
+  // Renderer — adapt to quality tier
   renderer = new THREE.WebGLRenderer({
-    antialias: true,
+    antialias: Q.antialias,
     powerPreference: 'high-performance'
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, Q.pixelRatio));
+  renderer.shadowMap.enabled = Q.shadowMap;
+  if (Q.shadowMap) {
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  }
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.85;
+  renderer.toneMappingExposure = Q.toneMappingExposure;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.xr.enabled = true;
   document.getElementById('app').appendChild(renderer.domElement);
@@ -91,8 +99,8 @@ async function init() {
 
   updateLoading(12, 'Generating textures...');
 
-  // Generate procedural textures
-  const textureGen = new TextureGenerator(512);
+  // Generate procedural textures — resolution from quality tier
+  const textureGen = new TextureGenerator(Q.textureResolution);
   const cathedralTextures = {
     wall: textureGen.generateStoneWall(),
     floor: textureGen.generateStoneFloor(),
@@ -109,34 +117,34 @@ async function init() {
   updateLoading(20, 'Constructing cathedral...');
 
   // Phase 2: Enhanced Cathedral with procedural textures
-  cathedral = new Cathedral(scene, cathedralTextures);
+  cathedral = new Cathedral(scene, cathedralTextures, Q);
   cathedral.build();
   cathedral.addFog(scene);
 
   updateLoading(30, 'Building pipe organ...');
 
   // Phase 3: Pipe Organ
-  organ = new PipeOrgan(scene, { wood: woodTexture, metal: metalTexture });
+  organ = new PipeOrgan(scene, { wood: woodTexture, metal: metalTexture }, Q);
 
   updateLoading(40, 'Setting up concert stage...');
 
   // Phase 3: Concert Stage
-  stage = new ConcertStage(scene, { metal: metalTexture });
+  stage = new ConcertStage(scene, { metal: metalTexture }, Q);
 
   updateLoading(44, 'Installing sound system...');
 
-  // Sound System (Void Acoustics PA rig)
-  soundSystem = new SoundSystem(scene, { metal: metalTexture });
+  // Sound System (Void Reality PA rig)
+  soundSystem = new SoundSystem(scene, { metal: metalTexture }, Q);
 
   updateLoading(47, 'Setting up club decor...');
 
   // Club decor (chandeliers, furniture, bar, static VFX)
-  clubDecor = new ClubDecor(scene, { metal: metalTexture });
+  clubDecor = new ClubDecor(scene, { metal: metalTexture }, Q);
 
   updateLoading(50, 'Creating DJ booth...');
 
   // Phase 3: DJ Booth
-  djBooth = new DJBooth(scene, { stone: cathedralTextures.wall, fabric: fabricTexture });
+  djBooth = new DJBooth(scene, { stone: cathedralTextures.wall, fabric: fabricTexture }, Q);
 
   updateLoading(55, 'Programming lights...');
 
@@ -147,10 +155,10 @@ async function init() {
   stage.setLightingDirector(lightingDirector);
 
   updateLoading(65, 'Lighting candles...');
-  candles = new CandleSystem(scene);
+  candles = new CandleSystem(scene, Q);
 
   updateLoading(70, 'Generating fog...');
-  fogSystem = new FogSystem(scene);
+  fogSystem = new FogSystem(scene, { count: Q.fogParticles });
 
   updateLoading(75, 'Casting god rays...');
   godRays = new GodRays(scene);
@@ -277,6 +285,7 @@ window.enterExperience = async function () {
 function animate() {
   const delta = clock.getDelta();
   elapsedTime += delta;
+  frameCount++;
 
   // Update controls
   controls.update(delta);
@@ -292,17 +301,23 @@ function animate() {
   // Update cathedral animations (stained glass)
   cathedral.update(elapsedTime);
 
-  // Update pipe organ (audio-reactive glow)
-  organ.update(bandValues);
+  // Update pipe organ (audio-reactive glow) — throttled on low/medium
+  if (frameCount % Q.organUpdateEvery === 0) {
+    organ.update(bandValues);
+  }
 
   // Update concert stage (LED panels, truss lights)
   stage.update(elapsedTime, bandValues, energy);
 
-  // Update sound system (subs + line arrays)
-  soundSystem.update(elapsedTime, bandValues, energy);
+  // Update sound system (subs + line arrays) — throttled
+  if (frameCount % Q.soundSystemUpdateEvery === 0) {
+    soundSystem.update(elapsedTime, bandValues, energy);
+  }
 
-  // Update club decor (chandeliers, furniture, static arcs)
-  clubDecor.update(elapsedTime, bandValues, energy, isBeat);
+  // Update club decor (chandeliers, furniture, static arcs) — throttled
+  if (frameCount % Q.clubDecorUpdateEvery === 0) {
+    clubDecor.update(elapsedTime, bandValues, energy, isBeat);
+  }
 
   // Update DJ booth (head bobbing, animations)
   djBooth.update(elapsedTime, isBeat, energy);
@@ -311,7 +326,7 @@ function animate() {
   lightingDirector.update(elapsedTime, delta, mood, bandValues, energy, isBeat);
 
   // Update VFX
-  if (settings.candles) {
+  if (settings.candles && (frameCount % Q.candleUpdateEvery === 0)) {
     candles.update(elapsedTime);
   }
 

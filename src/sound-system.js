@@ -51,9 +51,10 @@ const LOGO_SILVER = 0x888890;      // embossed logo — subtle silver contrast
 const J_CURVE = [0, 1, 3, 5, 8, 12, 16, 21];
 
 export class SoundSystem {
-  constructor(scene, textures = {}) {
+  constructor(scene, textures = {}, qualityConfig = {}) {
     this.scene = scene;
     this.textures = textures;
+    this.Q = qualityConfig;
     this.group = new THREE.Group();
     this.group.name = 'soundSystem';
 
@@ -163,7 +164,7 @@ export class SoundSystem {
     // --- Perforated grille texture: tight horizontal slats ---
     // Creates the classic perforated metal look without visible drivers
     const slatMat = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, roughness: 0.8, metalness: 0.25 });
-    const slatCount = 20; // many thin slats = fine perforated texture
+    const slatCount = this.Q.subSlatCount || 20; // many thin slats = fine perforated texture
     for (let s = 0; s < slatCount; s++) {
       const slatGeo = new THREE.BoxGeometry(recessW - 0.03, 0.005, 0.008);
       const slat = new THREE.Mesh(slatGeo, slatMat);
@@ -174,13 +175,15 @@ export class SoundSystem {
 
     // --- Structural cross braces on grille (2 vertical reinforcement bars) ---
     // These break up the flat grille and add visual interest without looking like eyes
-    const braceMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.5 });
-    [-recessW * 0.28, recessW * 0.28].forEach(bx => {
-      const braceGeo = new THREE.BoxGeometry(0.025, recessH - 0.04, 0.015);
-      const brace = new THREE.Mesh(braceGeo, braceMat);
-      brace.position.set(bx, 0, -SUB_D / 2 - 0.010);
-      cabinet.add(brace);
-    });
+    if (this.Q.subBraces !== false) {
+      const braceMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.5 });
+      [-recessW * 0.28, recessW * 0.28].forEach(bx => {
+        const braceGeo = new THREE.BoxGeometry(0.025, recessH - 0.04, 0.015);
+        const brace = new THREE.Mesh(braceGeo, braceMat);
+        brace.position.set(bx, 0, -SUB_D / 2 - 0.010);
+        cabinet.add(brace);
+      });
+    }
 
     // --- BASS PORT — narrow horizontal slot at bottom of grille ---
     // Integrated into the grille as a clean slot, NOT a separate protruding box.
@@ -196,46 +199,51 @@ export class SoundSystem {
     cabinet.add(portSlotCavity);
 
     // Thin border around port slot opening
-    const slotBorderMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4, metalness: 0.5 });
-    // Top edge
-    const topEdge = new THREE.Mesh(new THREE.BoxGeometry(portSlotW + 0.01, 0.006, 0.012), slotBorderMat);
-    topEdge.position.set(0, -recessH / 2 + 0.06 + portSlotH / 2 + 0.003, -SUB_D / 2 - 0.005);
-    cabinet.add(topEdge);
-    // Bottom edge
-    const botEdge = new THREE.Mesh(new THREE.BoxGeometry(portSlotW + 0.01, 0.006, 0.012), slotBorderMat);
-    botEdge.position.set(0, -recessH / 2 + 0.06 - portSlotH / 2 - 0.003, -SUB_D / 2 - 0.005);
-    cabinet.add(botEdge);
+    if (this.Q.subPortBorder !== false) {
+      const slotBorderMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4, metalness: 0.5 });
+      // Top edge
+      const topEdge = new THREE.Mesh(new THREE.BoxGeometry(portSlotW + 0.01, 0.006, 0.012), slotBorderMat);
+      topEdge.position.set(0, -recessH / 2 + 0.06 + portSlotH / 2 + 0.003, -SUB_D / 2 - 0.005);
+      cabinet.add(topEdge);
+      // Bottom edge
+      const botEdge = new THREE.Mesh(new THREE.BoxGeometry(portSlotW + 0.01, 0.006, 0.012), slotBorderMat);
+      botEdge.position.set(0, -recessH / 2 + 0.06 - portSlotH / 2 - 0.003, -SUB_D / 2 - 0.005);
+      cabinet.add(botEdge);
+    }
 
     // --- EMBOSSED 3D LOGO on side (replaces CanvasTexture) ---
-    const embossedMat = new THREE.MeshStandardMaterial({
-      color: LOGO_SILVER, // subtle silver contrast against dark cabinet
-      roughness: 0.25,    // smoother than matte body — catches light
-      metalness: 0.45,    // slightly metallic for embossed look
-      emissive: new THREE.Color(VOID_PURPLE),
-      emissiveIntensity: 0,
-    });
+    let embossedMat = null;
+    if (this.Q.subEmbossedLogo !== false) {
+      embossedMat = new THREE.MeshStandardMaterial({
+        color: LOGO_SILVER, // subtle silver contrast against dark cabinet
+        roughness: 0.25,    // smoother than matte body — catches light
+        metalness: 0.45,    // slightly metallic for embossed look
+        emissive: new THREE.Color(VOID_PURPLE),
+        emissiveIntensity: 0,
+      });
 
-    const logoGroup = new THREE.Group();
-    const embossHeight = 0.012; // raised from surface
-    const letterScale = 0.14;   // letter size
+      const logoGroup = new THREE.Group();
+      const embossHeight = 0.012; // raised from surface
+      const letterScale = 0.14;   // letter size
 
-    // "VOID" — large embossed letters
-    this._createEmbossedText(logoGroup, 'VOID', 0, 0.06, embossHeight, letterScale, embossedMat);
-    // "REALITY" — smaller embossed letters below
-    this._createEmbossedText(logoGroup, 'REALITY', 0, -0.08, embossHeight, letterScale * 0.45, embossedMat);
-    // Thin embossed line separator between VOID and REALITY
-    const sepGeo = new THREE.BoxGeometry(0.5, 0.006, embossHeight);
-    const sep = new THREE.Mesh(sepGeo, embossedMat);
-    sep.position.set(0, -0.01, embossHeight / 2);
-    logoGroup.add(sep);
+      // "VOID" — large embossed letters
+      this._createEmbossedText(logoGroup, 'VOID', 0, 0.06, embossHeight, letterScale, embossedMat);
+      // "REALITY" — smaller embossed letters below
+      this._createEmbossedText(logoGroup, 'REALITY', 0, -0.08, embossHeight, letterScale * 0.45, embossedMat);
+      // Thin embossed line separator between VOID and REALITY
+      const sepGeo = new THREE.BoxGeometry(0.5, 0.006, embossHeight);
+      const sep = new THREE.Mesh(sepGeo, embossedMat);
+      sep.position.set(0, -0.01, embossHeight / 2);
+      logoGroup.add(sep);
 
-    logoGroup.position.set(
-      side * (SUB_W / 2 + embossHeight / 2 + 0.001),
-      SUB_H * 0.08,
-      0
-    );
-    logoGroup.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
-    cabinet.add(logoGroup);
+      logoGroup.position.set(
+        side * (SUB_W / 2 + embossHeight / 2 + 0.001),
+        SUB_H * 0.08,
+        0
+      );
+      logoGroup.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+      cabinet.add(logoGroup);
+    }
 
     // --- Top/bottom edge trim (dark, aggressive edges) ---
     [SUB_H / 2, -SUB_H / 2].forEach(ty => {
@@ -246,23 +254,27 @@ export class SoundSystem {
     });
 
     // --- Aggressive corner protectors (larger, industrial) ---
-    const cornerGeo = new THREE.BoxGeometry(0.07, SUB_H + 0.02, 0.07);
-    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([cx, cz]) => {
-      const corner = new THREE.Mesh(cornerGeo, darkMat);
-      corner.position.set(cx * SUB_W / 2, 0, cz * SUB_D / 2);
-      cabinet.add(corner);
-    });
+    if (this.Q.subCornerProtectors !== false) {
+      const cornerGeo = new THREE.BoxGeometry(0.07, SUB_H + 0.02, 0.07);
+      [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([cx, cz]) => {
+        const corner = new THREE.Mesh(cornerGeo, darkMat);
+        corner.position.set(cx * SUB_W / 2, 0, cz * SUB_D / 2);
+        cabinet.add(corner);
+      });
+    }
 
     // --- Steel edge rails (industrial look — 4 vertical edges) ---
-    const railGeo = new THREE.BoxGeometry(0.025, SUB_H - 0.04, 0.025);
-    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([cx, cz]) => {
-      const rail = new THREE.Mesh(railGeo, metalMat);
-      rail.position.set(cx * (SUB_W / 2 - 0.02), 0, cz * (SUB_D / 2 - 0.02));
-      cabinet.add(rail);
-    });
+    if (this.Q.subEdgeRails !== false) {
+      const railGeo = new THREE.BoxGeometry(0.025, SUB_H - 0.04, 0.025);
+      [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([cx, cz]) => {
+        const rail = new THREE.Mesh(railGeo, metalMat);
+        rail.position.set(cx * (SUB_W / 2 - 0.02), 0, cz * (SUB_D / 2 - 0.02));
+        cabinet.add(rail);
+      });
+    }
 
     // --- Rubber feet on bottom cabinet ---
-    if (isBottom) {
+    if (isBottom && this.Q.subRubberFeet !== false) {
       const footMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.95 });
       const footGeo = new THREE.CylinderGeometry(0.06, 0.07, 0.05, 10);
       const hw = SUB_W / 2 - 0.12;
@@ -275,25 +287,27 @@ export class SoundSystem {
     }
 
     // --- Recessed handles on sides (deeper, more realistic) ---
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.35, metalness: 0.8 });
-    [-1, 1].forEach(s => {
-      // Handle recess cavity
-      const recessHandleGeo = new THREE.BoxGeometry(0.03, 0.1, 0.22);
-      const recessHandleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
-      const handleRecess = new THREE.Mesh(recessHandleGeo, recessHandleMat);
-      handleRecess.position.set(s * (SUB_W / 2 - 0.01), 0, 0);
-      cabinet.add(handleRecess);
+    if (this.Q.subHandles !== false) {
+      const handleMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.35, metalness: 0.8 });
+      [-1, 1].forEach(s => {
+        // Handle recess cavity
+        const recessHandleGeo = new THREE.BoxGeometry(0.03, 0.1, 0.22);
+        const recessHandleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+        const handleRecess = new THREE.Mesh(recessHandleGeo, recessHandleMat);
+        handleRecess.position.set(s * (SUB_W / 2 - 0.01), 0, 0);
+        cabinet.add(handleRecess);
 
-      // Handle bar (metal rod inside recess)
-      const handleBarGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.18, 8);
-      const handleBar = new THREE.Mesh(handleBarGeo, handleMat);
-      handleBar.rotation.x = Math.PI / 2;
-      handleBar.position.set(s * (SUB_W / 2 - 0.005), 0, 0);
-      cabinet.add(handleBar);
-    });
+        // Handle bar (metal rod inside recess)
+        const handleBarGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.18, 8);
+        const handleBar = new THREE.Mesh(handleBarGeo, handleMat);
+        handleBar.rotation.x = Math.PI / 2;
+        handleBar.position.set(s * (SUB_W / 2 - 0.005), 0, 0);
+        cabinet.add(handleBar);
+      });
+    }
 
     // --- Butterfly latch hardware on top (stacking latches) ---
-    if (!isBottom) {
+    if (!isBottom && this.Q.subLatches !== false) {
       const latchGeo = new THREE.BoxGeometry(0.04, 0.02, 0.06);
       [-0.5, 0.5].forEach(lx => {
         const latch = new THREE.Mesh(latchGeo, metalMat);
@@ -482,10 +496,11 @@ export class SoundSystem {
 
     // --- Fine horizontal grille bars ---
     const barMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7, metalness: 0.3 });
-    for (let s = 0; s < 6; s++) {
+    const slatCount = this.Q.arraySlatCount || 6;
+    for (let s = 0; s < slatCount; s++) {
       const barGeo = new THREE.BoxGeometry(avgW - 0.12, 0.006, 0.008);
       const bar = new THREE.Mesh(barGeo, barMat);
-      const sy = -BOX_H / 2 + 0.05 + s * ((BOX_H - 0.1) / 5);
+      const sy = -BOX_H / 2 + 0.05 + s * ((BOX_H - 0.1) / (slatCount - 1));
       bar.position.set(0, sy, -BOX_D / 2 - 0.006);
       boxGroup.add(bar);
     }
@@ -525,21 +540,23 @@ export class SoundSystem {
     });
 
     // --- Center compression horn (rectangular waveguide — deeper recess) ---
-    const hornRecessGeo = new THREE.BoxGeometry(0.22, BOX_H * 0.55, 0.03);
-    const hornRecessMat = new THREE.MeshStandardMaterial({
-      color: 0x050505, roughness: 0.95, metalness: 0,
-    });
-    const hornRecess = new THREE.Mesh(hornRecessGeo, hornRecessMat);
-    hornRecess.position.set(0, 0, -BOX_D / 2 + 0.015);
-    boxGroup.add(hornRecess);
+    if (this.Q.arrayHornThroats !== false) {
+      const hornRecessGeo = new THREE.BoxGeometry(0.22, BOX_H * 0.55, 0.03);
+      const hornRecessMat = new THREE.MeshStandardMaterial({
+        color: 0x050505, roughness: 0.95, metalness: 0,
+      });
+      const hornRecess = new THREE.Mesh(hornRecessGeo, hornRecessMat);
+      hornRecess.position.set(0, 0, -BOX_D / 2 + 0.015);
+      boxGroup.add(hornRecess);
 
-    // Horn flare (visible throat)
-    const hornMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5, metalness: 0.4 });
-    const hornGeo = new THREE.PlaneGeometry(0.16, BOX_H * 0.45);
-    const horn = new THREE.Mesh(hornGeo, hornMat);
-    horn.position.z = -BOX_D / 2 - 0.005;
-    horn.rotation.y = Math.PI;
-    boxGroup.add(horn);
+      // Horn flare (visible throat)
+      const hornMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5, metalness: 0.4 });
+      const hornGeo = new THREE.PlaneGeometry(0.16, BOX_H * 0.45);
+      const horn = new THREE.Mesh(hornGeo, hornMat);
+      horn.position.z = -BOX_D / 2 - 0.005;
+      horn.rotation.y = Math.PI;
+      boxGroup.add(horn);
+    }
 
     // --- Rigging side plates (heavy steel brackets) ---
     const bracketMat = new THREE.MeshStandardMaterial({
@@ -555,14 +572,16 @@ export class SoundSystem {
       boxGroup.add(bracket);
 
       // Rigging pin holes (small dark cylinders)
-      const pinHoleGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.055, 8);
-      const pinHoleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8, metalness: 0.5 });
-      [0.12, -0.12].forEach(ph => {
-        const pinHole = new THREE.Mesh(pinHoleGeo, pinHoleMat);
-        pinHole.position.set(s * (avgW / 2 + 0.03), ph, 0);
-        pinHole.rotation.z = Math.PI / 2;
-        boxGroup.add(pinHole);
-      });
+      if (this.Q.arrayRiggingPins !== false) {
+        const pinHoleGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.055, 8);
+        const pinHoleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8, metalness: 0.5 });
+        [0.12, -0.12].forEach(ph => {
+          const pinHole = new THREE.Mesh(pinHoleGeo, pinHoleMat);
+          pinHole.position.set(s * (avgW / 2 + 0.03), ph, 0);
+          pinHole.rotation.z = Math.PI / 2;
+          boxGroup.add(pinHole);
+        });
+      }
     });
 
     // --- Top/bottom dark edge trim ---
@@ -711,7 +730,7 @@ export class SoundSystem {
 
       // Embossed logo emissive glow (subtle purple on bass hits)
       for (let e = 0; e < stack.embossedMats.length; e++) {
-        stack.embossedMats[e].emissiveIntensity = bassEnergy * 1.5;
+        if (stack.embossedMats[e]) stack.embossedMats[e].emissiveIntensity = bassEnergy * 1.5;
       }
 
       // Cabinet vibration on heavy bass
@@ -755,7 +774,7 @@ export class SoundSystem {
 
     this.subStacks.forEach(stack => {
       stack.grilleMats.forEach(m => m.dispose());
-      stack.embossedMats.forEach(m => m.dispose());
+      stack.embossedMats.forEach(m => m && m.dispose());
     });
 
     this.lineArrays.forEach(array => {

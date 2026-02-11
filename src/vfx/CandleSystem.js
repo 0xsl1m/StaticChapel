@@ -1,22 +1,21 @@
 /**
- * CandleSystem - 48 animated candle flames on wall sconces
+ * CandleSystem - Animated candle flames on wall sconces
  * Phase 5: VFX / Polish
  *
- * 24 candles per side along the nave walls, each with:
- *   - Cream cylinder candle body
- *   - Billboard flame plane (emissive yellow-orange)
- *   - Warm PointLight with random flicker
+ * Quality-adaptive: 48 candles (high), 24 (medium), 8 (low)
+ * Low tier skips PointLights entirely — flame visuals only.
  */
 import * as THREE from 'three';
 
 export class CandleSystem {
-  constructor(scene) {
+  constructor(scene, qualityConfig = {}) {
     this.scene = scene;
+    this.Q = qualityConfig;
     this.group = new THREE.Group();
     this.group.name = 'candleSystem';
     this.scene.add(this.group);
 
-    /** @type {Array<{light: THREE.PointLight, flame: THREE.Mesh, baseIntensity: number, flickerOffset: number}>} */
+    /** @type {Array<{light: THREE.PointLight|null, flame: THREE.Mesh, baseIntensity: number, flickerOffset: number}>} */
     this.candles = [];
 
     this._build();
@@ -26,7 +25,10 @@ export class CandleSystem {
   // Build
   // ---------------------------------------------------------------
   _build() {
-    const candlesPerSide = 24;
+    const totalCandles = this.Q.candleCount || 48;
+    const useLights = this.Q.candleLights !== false;
+    const candlesPerSide = Math.ceil(totalCandles / 2);
+
     const zStart = -25;
     const zEnd = 18;
     const zSpan = zEnd - zStart;
@@ -35,14 +37,20 @@ export class CandleSystem {
     // Shared geometries
     const bodyGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 6);
     const flameGeo = new THREE.PlaneGeometry(0.08, 0.14);
+    const bracketGeo = new THREE.BoxGeometry(0.06, 0.02, 0.06);
 
-    // Shared materials (cloned per-candle where needed for independent opacity)
+    // Shared materials
     const bodyMat = new THREE.MeshStandardMaterial({
       color: 0xFFF8DC,
       roughness: 0.9,
       metalness: 0.0,
       emissive: 0xFFF8DC,
       emissiveIntensity: 0.05
+    });
+    const bracketMat = new THREE.MeshStandardMaterial({
+      color: 0x2a2a2a,
+      roughness: 0.6,
+      metalness: 0.4
     });
 
     for (let side = 0; side < 2; side++) {
@@ -58,12 +66,6 @@ export class CandleSystem {
         this.group.add(body);
 
         // --- Small bracket / mount ---
-        const bracketGeo = new THREE.BoxGeometry(0.06, 0.02, 0.06);
-        const bracketMat = new THREE.MeshStandardMaterial({
-          color: 0x2a2a2a,
-          roughness: 0.6,
-          metalness: 0.4
-        });
         const bracket = new THREE.Mesh(bracketGeo, bracketMat);
         bracket.position.set(xPos, yPos - 0.075 - 0.01, z);
         this.group.add(bracket);
@@ -81,46 +83,43 @@ export class CandleSystem {
         flame.position.set(xPos, yPos + 0.075 + 0.06, z);
         this.group.add(flame);
 
-        // --- Warm point light ---
-        const light = new THREE.PointLight(0xFFBF00, baseIntensity, 3);
-        light.position.set(xPos, yPos + 0.12, z);
-        this.group.add(light);
+        // --- Warm point light (skipped on low tier) ---
+        let light = null;
+        if (useLights) {
+          light = new THREE.PointLight(0xFFBF00, baseIntensity, 3);
+          light.position.set(xPos, yPos + 0.12, z);
+          this.group.add(light);
+        }
 
         // Store reference
         this.candles.push({
           light,
           flame,
           baseIntensity,
-          flickerOffset: Math.random() * Math.PI * 2 // desync each candle
+          flickerOffset: Math.random() * Math.PI * 2
         });
       }
     }
   }
 
   // ---------------------------------------------------------------
-  // Update (call every frame)
+  // Update (call every frame — main.js may throttle this)
   // ---------------------------------------------------------------
   update(time) {
     for (let i = 0; i < this.candles.length; i++) {
       const c = this.candles[i];
 
       // --- Light flicker ---
-      // Combine two sine waves at different frequencies + a small random jitter
       const flicker =
         Math.sin(time * 5.0 + c.flickerOffset) * 0.3 +
         Math.sin(time * 13.0 + c.flickerOffset * 2.7) * 0.15 +
         (Math.random() - 0.5) * 0.15;
 
-      c.light.intensity = Math.max(0.02, c.baseIntensity + c.baseIntensity * flicker);
+      if (c.light) {
+        c.light.intensity = Math.max(0.02, c.baseIntensity + c.baseIntensity * flicker);
+      }
 
-      // --- Flame billboard — always face camera ---
-      // We rotate the flame to face the camera by clearing x/z rotation and
-      // applying a lookAt toward the camera. A cheaper approach: just rotate
-      // on Y so the flat plane always shows its face down the nave.
-      // For true billboarding the caller can pass the camera, but a simple
-      // quaternion copy from the camera works well since PlaneGeometry faces +Z.
-      // We'll use onBeforeRender in the mesh instead for efficiency, but for
-      // simplicity just wiggle the Y rotation randomly:
+      // --- Flame billboard rotation ---
       c.flame.rotation.y = Math.sin(time * 2.0 + c.flickerOffset) * 0.3;
 
       // --- Flame scale pulsation ---
