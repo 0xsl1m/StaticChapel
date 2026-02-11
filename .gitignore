@@ -4,10 +4,10 @@ node_modules/
 # Build output
 dist/
 
-# Audio files (WAV - too large for GitHub, ~1.3GB)
-# These need to be hosted separately (e.g., CDN, cloud storage)
+# Audio files — WAVs too large for GitHub (~1.3GB), keep local only
 assets/audio/*.wav
 assets/audio/*.mp3
+# MP3s served from public/ (181MB total at 320kbps) — tracked in git
 
 # IDE / Editor
 .vscode/
