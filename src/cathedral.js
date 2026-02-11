@@ -67,61 +67,172 @@ export class Cathedral {
     floor.receiveShadow = true;
     this.group.add(floor);
 
-    // Gold inlay — sacred geometry pattern
-    const lineMat = new THREE.MeshBasicMaterial({
-      color: 0xFFD700, transparent: true, opacity: 0.35,
+    // === SACRED GEOMETRY FLOOR PATTERN ===
+    const goldMat = new THREE.MeshBasicMaterial({
+      color: 0xFFD700, transparent: true, opacity: 0.3,
+      side: THREE.DoubleSide, depthWrite: false
+    });
+    const goldBrightMat = new THREE.MeshBasicMaterial({
+      color: 0xFFD700, transparent: true, opacity: 0.5,
+      side: THREE.DoubleSide, depthWrite: false
+    });
+    const goldSubtleMat = new THREE.MeshBasicMaterial({
+      color: 0xFFD700, transparent: true, opacity: 0.15,
       side: THREE.DoubleSide, depthWrite: false
     });
 
-    // Center line
-    this.group.add(this._floorPlane(0.05, this.naveLength, lineMat, 0, 0));
+    // Center axis line
+    this.group.add(this._floorPlane(0.04, this.naveLength, goldMat, 0, 0));
 
     // Cross lines at column spacing
     const spacing = this.naveLength / (this.columnCount + 1);
     for (let i = 1; i <= this.columnCount; i++) {
       const z = -this.naveLength / 2 + spacing * i;
-      this.group.add(this._floorPlane(this.naveWidth, 0.03, lineMat, 0, z));
+      this.group.add(this._floorPlane(this.naveWidth, 0.025, goldSubtleMat, 0, z));
     }
 
-    // Concentric circles at center
-    for (let r = 1.5; r <= 8; r += 1.5) {
+    // ======== CENTRAL FLOWER OF LIFE (dancefloor) ========
+    // 7-circle Seed of Life at z=4 (center of dancefloor)
+    const floorCenterZ = 4;
+    const seedR = 2.0; // radius of each circle in the pattern
+    const seedPositions = [[0, 0]]; // center
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      seedPositions.push([Math.cos(angle) * seedR, Math.sin(angle) * seedR]);
+    }
+
+    // Draw each circle of the Seed of Life
+    seedPositions.forEach(([sx, sz]) => {
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(r - 0.02, r + 0.02, 64),
-        lineMat
+        new THREE.RingGeometry(seedR - 0.025, seedR + 0.025, 48),
+        goldBrightMat
       );
       ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.01;
+      ring.position.set(sx, 0.012, floorCenterZ + sz);
       this.group.add(ring);
-    }
-
-    // Pentagram at center
-    this.createPentagram(0, 0, 5, lineMat);
-
-    // Diagonal sacred geometry lines
-    const diagMat = new THREE.MeshBasicMaterial({
-      color: 0xFFD700, transparent: true, opacity: 0.15,
-      side: THREE.DoubleSide, depthWrite: false
     });
-    for (let angle = 0; angle < Math.PI; angle += Math.PI / 6) {
-      const len = 14;
-      const geo = new THREE.PlaneGeometry(0.02, len);
-      const line = new THREE.Mesh(geo, diagMat);
-      line.rotation.x = -Math.PI / 2;
-      line.rotation.z = angle;
-      line.position.y = 0.01;
-      this.group.add(line);
+
+    // Outer bounding circle
+    const outerR = seedR * 2 + 0.5;
+    const outerCircle = new THREE.Mesh(
+      new THREE.RingGeometry(outerR - 0.03, outerR + 0.03, 64),
+      goldMat
+    );
+    outerCircle.rotation.x = -Math.PI / 2;
+    outerCircle.position.set(0, 0.012, floorCenterZ);
+    this.group.add(outerCircle);
+
+    // Second outer circle (double border)
+    const outer2 = new THREE.Mesh(
+      new THREE.RingGeometry(outerR + 0.15, outerR + 0.2, 64),
+      goldSubtleMat
+    );
+    outer2.rotation.x = -Math.PI / 2;
+    outer2.position.set(0, 0.012, floorCenterZ);
+    this.group.add(outer2);
+
+    // Metatron's Cube — connect all Seed of Life centers
+    for (let i = 0; i < seedPositions.length; i++) {
+      for (let j = i + 1; j < seedPositions.length; j++) {
+        const [ax, az] = seedPositions[i];
+        const [bx, bz] = seedPositions[j];
+        const dx = bx - ax, dz = bz - az;
+        const len = Math.sqrt(dx * dx + dz * dz);
+        const angle = Math.atan2(dx, dz);
+        const line = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.02, len), goldMat
+        );
+        line.rotation.x = -Math.PI / 2;
+        line.rotation.z = -angle;
+        line.position.set((ax + bx) / 2, 0.013, floorCenterZ + (az + bz) / 2);
+        this.group.add(line);
+      }
     }
 
-    // Tile grid pattern (subtle)
+    // Central hexagram (Star of David) in the Seed of Life
+    [0, Math.PI].forEach(baseAngle => {
+      const triPts = [];
+      for (let i = 0; i < 3; i++) {
+        const a = baseAngle + (i / 3) * Math.PI * 2 - Math.PI / 2;
+        triPts.push([Math.cos(a) * seedR * 0.85, Math.sin(a) * seedR * 0.85]);
+      }
+      for (let i = 0; i < 3; i++) {
+        const p1 = triPts[i], p2 = triPts[(i + 1) % 3];
+        const dx = p2[0] - p1[0], dz = p2[1] - p1[1];
+        const len = Math.sqrt(dx * dx + dz * dz);
+        const angle = Math.atan2(dx, dz);
+        const seg = new THREE.Mesh(new THREE.PlaneGeometry(0.03, len), goldBrightMat);
+        seg.rotation.x = -Math.PI / 2;
+        seg.rotation.z = -angle;
+        seg.position.set((p1[0] + p2[0]) / 2, 0.014, floorCenterZ + (p1[1] + p2[1]) / 2);
+        this.group.add(seg);
+      }
+    });
+
+    // ======== VESICA PISCIS at bar approach (z = -16) ========
+    const vpZ = -16;
+    const vpR = 1.8;
+    const vpSpread = 1.2;
+    [-vpSpread / 2, vpSpread / 2].forEach(ox => {
+      const vpRing = new THREE.Mesh(
+        new THREE.RingGeometry(vpR - 0.02, vpR + 0.02, 40), goldMat
+      );
+      vpRing.rotation.x = -Math.PI / 2;
+      vpRing.position.set(ox, 0.012, vpZ);
+      this.group.add(vpRing);
+    });
+
+    // ======== SMALLER SEED OF LIFE near stage (z = 16) ========
+    const stage2Z = 16;
+    const smallR = 1.2;
+    const smallPositions = [[0, 0]];
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      smallPositions.push([Math.cos(angle) * smallR, Math.sin(angle) * smallR]);
+    }
+    smallPositions.forEach(([sx, sz]) => {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(smallR - 0.02, smallR + 0.02, 36), goldSubtleMat
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(sx, 0.012, stage2Z + sz);
+      this.group.add(ring);
+    });
+
+    // ======== RADIAL GEOMETRY at key column intersections ========
+    // Small rosettes at select column positions
+    const rosePositions = [
+      [-this.naveWidth / 2 + 1, -8], [this.naveWidth / 2 - 1, -8],
+      [-this.naveWidth / 2 + 1, 6], [this.naveWidth / 2 - 1, 6],
+    ];
+    rosePositions.forEach(([rx, rz]) => {
+      // 6-petal rosette
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.6, 0.63, 24), goldSubtleMat
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(rx + Math.cos(angle) * 0.6, 0.012, rz + Math.sin(angle) * 0.6);
+        this.group.add(ring);
+      }
+      // Center circle
+      const center = new THREE.Mesh(new THREE.RingGeometry(0.58, 0.63, 24), goldMat);
+      center.rotation.x = -Math.PI / 2;
+      center.position.set(rx, 0.012, rz);
+      this.group.add(center);
+    });
+
+    // Subtle tile grid
     const tileMat = new THREE.MeshBasicMaterial({
-      color: 0x1a1a2e, transparent: true, opacity: 0.3,
+      color: 0x1a1a2e, transparent: true, opacity: 0.2,
       side: THREE.DoubleSide, depthWrite: false
     });
     for (let x = -this.totalWidth / 2; x < this.totalWidth / 2; x += 2) {
-      this.group.add(this._floorPlane(0.01, this.naveLength, tileMat, x, 0));
+      this.group.add(this._floorPlane(0.008, this.naveLength, tileMat, x, 0));
     }
     for (let z = -this.naveLength / 2; z < this.naveLength / 2; z += 2) {
-      this.group.add(this._floorPlane(this.totalWidth, 0.01, tileMat, 0, z));
+      this.group.add(this._floorPlane(this.totalWidth, 0.008, tileMat, 0, z));
     }
   }
 
@@ -132,33 +243,7 @@ export class Cathedral {
     return mesh;
   }
 
-  createPentagram(cx, cz, radius, material) {
-    const points = [];
-    for (let i = 0; i < 5; i++) {
-      const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
-      points.push(new THREE.Vector3(
-        cx + Math.cos(angle) * radius,
-        0.015,
-        cz + Math.sin(angle) * radius
-      ));
-    }
-    // Draw star lines
-    const starOrder = [0, 2, 4, 1, 3, 0];
-    for (let i = 0; i < starOrder.length - 1; i++) {
-      const a = points[starOrder[i]];
-      const b = points[starOrder[i + 1]];
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      const angle = Math.atan2(dx, dz);
-      const geo = new THREE.PlaneGeometry(0.03, len);
-      const line = new THREE.Mesh(geo, material);
-      line.rotation.x = -Math.PI / 2;
-      line.rotation.z = -angle;
-      line.position.set((a.x + b.x) / 2, 0.015, (a.z + b.z) / 2);
-      this.group.add(line);
-    }
-  }
+  // (Pentagram removed — replaced by Flower of Life / Metatron's Cube sacred geometry)
 
   createWalls() {
     const wallMatOpts = {
@@ -340,7 +425,7 @@ export class Cathedral {
         this.group.add(windowGroup);
 
         // Glow light - colored illumination cast INWARD from windows
-        const light = new THREE.PointLight(color, 1.5, 25);
+        const light = new THREE.PointLight(color, 0.07, 12);
         light.position.set(side * (this.totalWidth / 2 - 1.5), windowY, z);
         this.group.add(light);
 
@@ -362,75 +447,207 @@ export class Cathedral {
   createRoseWindow() {
     const roseGroup = new THREE.Group();
     const radius = 4.5;
-    const color = 0x8B00FF;
 
-    // Outer ring
+    const traceryMat = new THREE.MeshStandardMaterial({
+      color: 0x0a0a14, roughness: 0.85, metalness: 0.1, side: THREE.DoubleSide
+    });
+
+    // ======== OUTER FRAME — thick stone ring ========
     const outerRing = new THREE.Mesh(
-      new THREE.RingGeometry(radius - 0.2, radius, 32),
-      new THREE.MeshStandardMaterial({ color: 0x0a0a14, roughness: 0.9, side: THREE.DoubleSide })
+      new THREE.RingGeometry(radius - 0.15, radius + 0.1, 64),
+      traceryMat
     );
     roseGroup.add(outerRing);
 
-    // Main glass
-    const glassMat = new THREE.MeshBasicMaterial({
-      color, transparent: true, opacity: 0.5, side: THREE.DoubleSide
-    });
-    const mainGlass = new THREE.Mesh(
-      new THREE.CircleGeometry(radius - 0.2, 32),
-      glassMat
-    );
-    mainGlass.position.z = 0.01;
-    roseGroup.add(mainGlass);
+    // Secondary inner border ring
+    roseGroup.add(new THREE.Mesh(
+      new THREE.RingGeometry(radius - 0.2, radius - 0.12, 64), traceryMat
+    ));
 
-    // Radial tracery spokes
-    const spokeMat = new THREE.MeshStandardMaterial({ color: 0x0a0a14, roughness: 0.9 });
+    // ======== BACKGROUND GLASS (deep indigo base) ========
+    const bgGlass = new THREE.Mesh(
+      new THREE.CircleGeometry(radius - 0.2, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0x0a0520, transparent: true, opacity: 0.85, side: THREE.DoubleSide
+      })
+    );
+    bgGlass.position.z = -0.01;
+    roseGroup.add(bgGlass);
+
+    // ======== FLOWER OF LIFE — 7 interlocking circles ========
+    // Center circle + 6 around it at 60° intervals, radius = flowerR
+    const flowerR = 1.4;
+    const flowerPositions = [[0, 0]]; // center
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      flowerPositions.push([Math.cos(angle) * flowerR, Math.sin(angle) * flowerR]);
+    }
+
+    // Glass colors for the 7 circles — rich sacred spectrum
+    const flowerColors = [
+      0xcc44ff, // center — violet
+      0xff2244, // red
+      0xff8800, // orange
+      0xffdd00, // gold
+      0x22dd44, // green
+      0x2288ff, // blue
+      0x8844ff, // indigo
+    ];
+
+    flowerPositions.forEach(([fx, fy], idx) => {
+      // Glowing glass circle
+      const glassMat = new THREE.MeshBasicMaterial({
+        color: flowerColors[idx],
+        transparent: true,
+        opacity: 0.45,
+        side: THREE.DoubleSide,
+      });
+      const glass = new THREE.Mesh(new THREE.CircleGeometry(flowerR - 0.04, 32), glassMat);
+      glass.position.set(fx, fy, 0.003);
+      roseGroup.add(glass);
+
+      // Tracery ring around each circle
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(flowerR - 0.06, flowerR, 32),
+        traceryMat
+      );
+      ring.position.set(fx, fy, 0.01);
+      roseGroup.add(ring);
+    });
+
+    // ======== SECOND RING — 12 smaller circles at double distance ========
+    const ring2R = 0.85;
+    const ring2Dist = flowerR * 2;
+    const ring2Colors = [
+      0xff0066, 0xff6600, 0xffcc00, 0x66ff00, 0x00ff66, 0x00ffcc,
+      0x0066ff, 0x3300ff, 0x6600cc, 0xcc0099, 0xff0044, 0xff4400,
+    ];
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2 + Math.PI / 12;
+      const cx = Math.cos(angle) * ring2Dist;
+      const cy = Math.sin(angle) * ring2Dist;
+      // Only add if within the window radius
+      if (Math.sqrt(cx * cx + cy * cy) + ring2R < radius - 0.3) {
+        const glassMat = new THREE.MeshBasicMaterial({
+          color: ring2Colors[i], transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+        });
+        const glassCircle = new THREE.Mesh(new THREE.CircleGeometry(ring2R - 0.03, 24), glassMat);
+        glassCircle.position.set(cx, cy, 0.002);
+        roseGroup.add(glassCircle);
+        const ring = new THREE.Mesh(new THREE.RingGeometry(ring2R - 0.04, ring2R, 24), traceryMat);
+        ring.position.set(cx, cy, 0.012);
+        roseGroup.add(ring);
+      }
+    }
+
+    // ======== METATRON'S CUBE — lines connecting circle centers ========
+    const lineMat = new THREE.MeshBasicMaterial({
+      color: 0xFFD700, transparent: true, opacity: 0.6,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+
+    // Connect all Flower of Life centers to each other (21 lines)
+    for (let i = 0; i < flowerPositions.length; i++) {
+      for (let j = i + 1; j < flowerPositions.length; j++) {
+        const [ax, ay] = flowerPositions[i];
+        const [bx, by] = flowerPositions[j];
+        const dx = bx - ax, dy = by - ay;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        const lineGeo = new THREE.PlaneGeometry(len, 0.03);
+        const line = new THREE.Mesh(lineGeo, lineMat);
+        line.position.set((ax + bx) / 2, (ay + by) / 2, 0.015);
+        line.rotation.z = angle;
+        roseGroup.add(line);
+      }
+    }
+
+    // ======== 12 RADIAL SPOKES — from center to rim ========
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2;
       const spoke = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, radius * 1.8, 0.08),
-        spokeMat
+        new THREE.BoxGeometry(0.05, radius * 1.7, 0.06), traceryMat
       );
       spoke.rotation.z = angle;
       spoke.position.z = 0.02;
       roseGroup.add(spoke);
     }
 
-    // Concentric tracery rings
-    for (let r = 1.2; r < radius; r += 1.2) {
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(r - 0.03, r + 0.03, 32),
-        spokeMat
-      );
-      ring.position.z = 0.02;
-      roseGroup.add(ring);
-    }
+    // ======== CONCENTRIC TRACERY RINGS ========
+    [1.0, 2.0, 3.2, 4.0].forEach(r => {
+      const traceryRing = new THREE.Mesh(new THREE.RingGeometry(r - 0.025, r + 0.025, 48), traceryMat);
+      traceryRing.position.set(0, 0, 0.018);
+      roseGroup.add(traceryRing);
+    });
 
-    // Inner petal shapes (colored segments between spokes)
-    const petalColors = [0xFF00FF, 0x6600CC, 0x4169E1, 0x00FFFF, 0x8B00FF, 0xFFD700];
+    // ======== OUTER PETAL SEGMENTS — colored glass between spokes in outer ring ========
+    const petalColors = [
+      0xff1144, 0xff6600, 0xffcc00, 0x44ff00, 0x00ccff, 0x4400ff,
+      0x8800cc, 0xff00aa, 0xff4400, 0x00ff88, 0x0044ff, 0xaa00ff,
+    ];
     for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
+      const angle = (i / 12) * Math.PI * 2 + Math.PI / 12;
       const petalMat = new THREE.MeshBasicMaterial({
-        color: petalColors[i % petalColors.length],
-        transparent: true,
-        opacity: 0.4,
-        side: THREE.DoubleSide
+        color: petalColors[i], transparent: true, opacity: 0.35, side: THREE.DoubleSide,
       });
+      // Wedge-shaped segment between spokes in the outer ring
       const petal = new THREE.Mesh(
-        new THREE.CircleGeometry(0.8, 6, angle, Math.PI / 6),
+        new THREE.RingGeometry(3.3, radius - 0.25, 8, 1, angle - Math.PI / 13, Math.PI / 7.5),
         petalMat
       );
-      petal.position.z = 0.005;
+      petal.position.z = 0.001;
       roseGroup.add(petal);
     }
 
-    roseGroup.position.set(0, 22, -this.naveLength / 2 + 0.2);
+    // ======== CENTRAL SACRED SYMBOL — hexagram (Star of David / Seal of Solomon) ========
+    const starMat = new THREE.MeshBasicMaterial({
+      color: 0xFFD700, transparent: true, opacity: 0.7,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    // Two overlapping triangles
+    [0, Math.PI].forEach(baseAngle => {
+      const triPoints = [];
+      for (let i = 0; i < 3; i++) {
+        const a = baseAngle + (i / 3) * Math.PI * 2 - Math.PI / 2;
+        triPoints.push(new THREE.Vector2(Math.cos(a) * 0.65, Math.sin(a) * 0.65));
+      }
+      // Draw triangle as 3 line segments
+      for (let i = 0; i < 3; i++) {
+        const p1 = triPoints[i], p2 = triPoints[(i + 1) % 3];
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        const seg = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.04), starMat);
+        seg.position.set((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, 0.02);
+        seg.rotation.z = angle;
+        roseGroup.add(seg);
+      }
+    });
+
+    // Central gemstone
+    const gem = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.18, 1),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0xcc88ff, emissiveIntensity: 0.6,
+        roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.8,
+      })
+    );
+    gem.position.z = 0.04;
+    roseGroup.add(gem);
+
+    // Position on interior face of back wall
+    roseGroup.position.set(0, 22, -this.naveLength / 2 + 0.45);
     this.group.add(roseGroup);
     this.roseWindow = roseGroup;
 
-    // Rose window light
-    const roseLight = new THREE.PointLight(0x8B00FF, 1.5, 30);
-    roseLight.position.set(0, 22, -this.naveLength / 2 + 3);
+    // Multi-colored rose window light (warm with purple tint)
+    const roseLight = new THREE.PointLight(0xbb66ff, 0.3, 22);
+    roseLight.position.set(0, 22, -this.naveLength / 2 + 2);
     this.group.add(roseLight);
+    // Secondary warm accent
+    const roseWarmLight = new THREE.PointLight(0xffeedd, 0.12, 15);
+    roseWarmLight.position.set(0, 22, -this.naveLength / 2 + 1.5);
+    this.group.add(roseWarmLight);
   }
 
   createColumns() {
@@ -763,11 +980,7 @@ export class Cathedral {
 
     for (const side of [-1, 1]) {
       const centerX = side * (this.naveWidth / 2 + this.aisleWidth / 2);
-      const aisleGeo = new THREE.PlaneGeometry(this.aisleWidth, this.naveLength);
-      const aisleCeil = new THREE.Mesh(aisleGeo, aisleCeilMat);
-      aisleCeil.rotation.x = Math.PI / 2;
-      aisleCeil.position.set(centerX, aisleHeight, 0);
-      this.group.add(aisleCeil);
+      // Side aisle ceiling removed — was blocking stained glass light
 
       // Side aisle arcade arches (connecting nave columns to outer wall)
       const spacing = this.naveLength / (this.columnCount + 1);
@@ -814,21 +1027,6 @@ export class Cathedral {
     platform.position.set(0, stageHeight / 2, stageZ);
     platform.receiveShadow = true;
     this.group.add(platform);
-
-    // Stage steps (3 steps)
-    const stepMat = new THREE.MeshStandardMaterial({
-      color: 0x0c0c18, roughness: 0.4, metalness: 0.2
-    });
-    for (let i = 0; i < 3; i++) {
-      const stepW = stageWidth + 1 + i * 0.5;
-      const stepH = stageHeight / 3;
-      const step = new THREE.Mesh(
-        new THREE.BoxGeometry(stepW, stepH, 0.5),
-        stepMat
-      );
-      step.position.set(0, stepH * (i + 0.5), stageZ - stageDepth / 2 - 0.25 - i * 0.5);
-      this.group.add(step);
-    }
 
     // Stage edge glow strip
     const edgeMat = new THREE.MeshBasicMaterial({
@@ -949,16 +1147,16 @@ export class Cathedral {
   }
 
   createBasicLighting() {
-    // Ambient — enough to see architecture detail, not so much it washes out textures
-    const ambient = new THREE.AmbientLight(0x887766, 0.9);
+    // Ambient — warm fill so architecture and furniture are visible
+    const ambient = new THREE.AmbientLight(0x887766, 0.8);
     this.group.add(ambient);
 
-    // Hemisphere light — warm sky, cool ground for natural fill
-    const hemi = new THREE.HemisphereLight(0x8899aa, 0x443322, 0.8);
+    // Hemisphere light — natural fill, warm below / cool above
+    const hemi = new THREE.HemisphereLight(0x8899aa, 0x443322, 0.55);
     this.group.add(hemi);
 
-    // Main directional (moonlight through windows)
-    const dirLight = new THREE.DirectionalLight(0x99aabb, 0.8);
+    // Main directional (moonlight through windows) — reduced
+    const dirLight = new THREE.DirectionalLight(0x99aabb, 0.3);
     dirLight.position.set(-10, 25, 0);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 1024;
@@ -971,39 +1169,37 @@ export class Cathedral {
     dirLight.shadow.camera.bottom = -5;
     this.group.add(dirLight);
 
-    // Second directional from opposite side
-    const dirLight2 = new THREE.DirectionalLight(0x887799, 0.45);
+    // Second directional from opposite side — reduced
+    const dirLight2 = new THREE.DirectionalLight(0x887799, 0.12);
     dirLight2.position.set(10, 20, 5);
     this.group.add(dirLight2);
 
-    // Third directional from front
-    const dirLight3 = new THREE.DirectionalLight(0x8899aa, 0.35);
+    // Third directional from front — reduced
+    const dirLight3 = new THREE.DirectionalLight(0x8899aa, 0.1);
     dirLight3.position.set(0, 15, -25);
     this.group.add(dirLight3);
 
-    // Nave fill lights — warm to complement sandstone textures
+    // Nave fill lights — drastically reduced, keep only 5 key positions
     const naveFillColor = 0x998877;
     const naveFillPositions = [
-      [0, 28, -25], [0, 28, -15], [0, 28, -5], [0, 28, 5], [0, 28, 15],
-      [-7, 12, -20], [7, 12, -20], [-7, 12, -5], [7, 12, -5],
-      [-7, 12, 10], [7, 12, 10],
-      [0, 15, -20], [0, 15, 0], [0, 15, 15],
+      [0, 28, -20], [0, 28, 0], [0, 28, 15],
+      [-7, 12, -10], [7, 12, -10],
     ];
     naveFillPositions.forEach(([fx, fy, fz]) => {
-      const fill = new THREE.PointLight(naveFillColor, 0.5, 45, 1);
+      const fill = new THREE.PointLight(naveFillColor, 0.15, 35, 1.5);
       fill.position.set(fx, fy, fz);
       this.group.add(fill);
     });
 
-    // Altar spotlight
-    const altarSpot = new THREE.SpotLight(0xFFD700, 1.2, 40, Math.PI / 5, 0.5, 1);
+    // Altar spotlight — further reduced
+    const altarSpot = new THREE.SpotLight(0xFFD700, 0.3, 35, Math.PI / 5, 0.5, 1);
     altarSpot.position.set(0, 28, this.naveLength / 2 - 5);
     altarSpot.target.position.set(0, 1.5, this.naveLength / 2 - 6);
     this.group.add(altarSpot);
     this.group.add(altarSpot.target);
 
-    // Purple organ wall accent
-    const organLight = new THREE.SpotLight(0x8B00FF, 0.8, 40, Math.PI / 4, 0.3, 1);
+    // Purple organ wall accent — further reduced
+    const organLight = new THREE.SpotLight(0x8B00FF, 0.2, 35, Math.PI / 4, 0.3, 1);
     organLight.position.set(0, 2, this.naveLength / 2 - 15);
     organLight.target.position.set(0, 15, this.naveLength / 2 - 1);
     this.group.add(organLight);
@@ -1025,7 +1221,7 @@ export class Cathedral {
       for (const panel of win.panels) {
         panel.material.opacity = intensity;
       }
-      win.light.intensity = 1.2 + shift * 0.5;
+      win.light.intensity = 0.07 + shift * 0.02;
     }
 
     // Rose window slow rotation

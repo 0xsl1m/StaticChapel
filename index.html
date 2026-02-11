@@ -499,11 +499,7 @@
         <span class="setting-value" id="light-intensity-val">70%</span>
       </div>
 
-      <div class="setting-group">
-        <label>Particle Count</label>
-        <input type="range" class="setting-slider" id="particle-count" min="0" max="100" value="60">
-        <span class="setting-value" id="particle-count-val">60%</span>
-      </div>
+      <!-- Particle system removed for performance -->
 
       <div class="setting-group">
         <label>Camera FOV</label>
@@ -544,6 +540,24 @@
           <label>Show Mood</label>
           <div class="toggle-switch on" id="toggle-mood"></div>
         </div>
+      </div>
+
+      <div class="setting-group">
+        <label>Mood Override</label>
+        <select id="mood-select" style="width:100%;background:#111;color:#ccc;border:1px solid #333;padding:4px 6px;border-radius:3px;font-size:12px;margin-top:4px;">
+          <option value="">Auto</option>
+          <option value="aggressive">Aggressive</option>
+          <option value="bass_heavy">Bass Heavy</option>
+          <option value="chaos">Chaos</option>
+          <option value="euphoric">Euphoric</option>
+          <option value="building">Building</option>
+          <option value="balanced_medium">Balanced</option>
+          <option value="ritualistic">Ritualistic</option>
+          <option value="glitch">Glitch</option>
+          <option value="warm_ambient">Warm Ambient</option>
+          <option value="cold_ambient">Cold Ambient</option>
+          <option value="silence">Silence</option>
+        </select>
       </div>
     </div>
   </div>

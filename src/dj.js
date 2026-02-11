@@ -115,35 +115,32 @@ export class DJBooth {
     topTrim.position.set(0, BOOTH_Y + boothH + trimH / 2, BOOTH_CENTER_Z);
     this.group.add(topTrim);
 
-    // Stone gothic arches on the front face (simplified as indentations)
-    const archMat = new THREE.MeshStandardMaterial({
-      color: 0x111122,
-      roughness: 0.9,
-      metalness: 0.0,
-    });
+    // LED facade panel on front of DJ booth
+    const facadeCanvas = document.createElement('canvas');
+    facadeCanvas.width = 128;
+    facadeCanvas.height = 64;
+    const facadeCtx = facadeCanvas.getContext('2d');
+    facadeCtx.fillStyle = '#050510';
+    facadeCtx.fillRect(0, 0, 128, 64);
 
-    for (let a = 0; a < 3; a++) {
-      const archX = (a - 1) * 0.6;
-      const archGeo = new THREE.PlaneGeometry(0.4, 0.7);
-      const arch = new THREE.Mesh(archGeo, archMat);
-      arch.position.set(archX, BOOTH_Y + 0.45, BOOTH_CENTER_Z - boothD / 2 - 0.01);
-      this.group.add(arch);
-    }
+    const facadeTexture = new THREE.CanvasTexture(facadeCanvas);
+    facadeTexture.minFilter = THREE.LinearFilter;
+    facadeTexture.magFilter = THREE.LinearFilter;
 
-    // Cross/sacred symbol on front (simple gold cross)
-    const crossVert = new THREE.Mesh(
-      new THREE.BoxGeometry(0.04, 0.3, 0.02),
-      topTrimMat
-    );
-    crossVert.position.set(0, BOOTH_Y + 0.5, BOOTH_CENTER_Z - boothD / 2 - 0.02);
-    this.group.add(crossVert);
+    const facadeMat = new THREE.MeshBasicMaterial({ map: facadeTexture, toneMapped: false });
+    const facadeGeo = new THREE.PlaneGeometry(1.8, 0.8);
+    const facadeMesh = new THREE.Mesh(facadeGeo, facadeMat);
+    facadeMesh.position.set(0, BOOTH_Y + 0.5, BOOTH_CENTER_Z - boothD / 2 - 0.01);
+    this.group.add(facadeMesh);
 
-    const crossHoriz = new THREE.Mesh(
-      new THREE.BoxGeometry(0.2, 0.04, 0.02),
-      topTrimMat
-    );
-    crossHoriz.position.set(0, BOOTH_Y + 0.58, BOOTH_CENTER_Z - boothD / 2 - 0.02);
-    this.group.add(crossHoriz);
+    // Store for animation
+    this.facadePanel = { canvas: facadeCanvas, ctx: facadeCtx, texture: facadeTexture, mesh: facadeMesh };
+
+    // Thin bezel frame
+    const bezelGeo = new THREE.EdgesGeometry(facadeGeo);
+    const bezelLine = new THREE.LineSegments(bezelGeo, new THREE.LineBasicMaterial({ color: 0x333333 }));
+    bezelLine.position.copy(facadeMesh.position);
+    this.group.add(bezelLine);
   }
 
   // ==================================================================
@@ -582,6 +579,7 @@ export class DJBooth {
     this.updateAvatarAnimation(time, energy);
     this.updateLaptopScreen(time, energy);
     this.updateCDJScreens(time, energy);
+    this.updateFacade(time, energy);
   }
 
   // ------------------------------------------------------------------
@@ -772,5 +770,40 @@ export class DJBooth {
       }
     });
     this.scene.remove(this.group);
+  }
+
+  // ------------------------------------------------------------------
+  //  DJ Booth LED facade animation
+  // ------------------------------------------------------------------
+  updateFacade(time, energy) {
+    if (!this.facadePanel) return;
+    const { canvas, ctx, texture } = this.facadePanel;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Dark base
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, w, h);
+
+    // Audio-reactive color wash
+    const hue = ((time * 40) + 200) % 360;
+    const lum = 15 + energy * 35 + this.beatImpact * 20;
+    ctx.fillStyle = `hsl(${hue}, 80%, ${lum}%)`;
+    ctx.fillRect(0, 0, w, h);
+
+    // Center glow pulse
+    const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
+    grad.addColorStop(0, `hsla(${(hue + 60) % 360}, 90%, ${30 + energy * 30}%, 0.6)`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Beat flash
+    if (this.beatImpact > 0.3) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${this.beatImpact * 0.3})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    texture.needsUpdate = true;
   }
 }

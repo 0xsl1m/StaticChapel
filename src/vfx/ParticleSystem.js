@@ -9,8 +9,20 @@ export class DustMotes {
     this.count = count;
     this.particles = null;
     this.velocities = [];
+    this.opacityScale = 0; // start invisible (slider default = 0)
 
     this.create();
+  }
+
+  /**
+   * Set opacity scale from settings slider (0 = invisible, 1 = full)
+   */
+  setOpacityScale(scale) {
+    this.opacityScale = scale;
+    if (this.particles) {
+      this.particles.visible = scale > 0;
+      this.particles.material.opacity = scale > 0 ? 0 : 0; // update() will handle actual opacity
+    }
   }
 
   create() {
@@ -40,7 +52,7 @@ export class DustMotes {
       color: 0xFFD700,
       size: 0.08,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       sizeAttenuation: true
@@ -48,6 +60,7 @@ export class DustMotes {
 
     this.particles = new THREE.Points(geometry, material);
     this.particles.name = 'dustMotes';
+    this.particles.visible = false; // start invisible
     this.scene.add(this.particles);
   }
 
@@ -79,7 +92,8 @@ export class DustMotes {
 
     this.particles.geometry.attributes.position.needsUpdate = true;
 
-    // Pulse brightness with audio
-    this.particles.material.opacity = 0.3 + audioEnergy * 0.5;
+    // Pulse brightness with audio, scaled by particle count slider
+    const baseOpacity = 0.3 + audioEnergy * 0.5;
+    this.particles.material.opacity = baseOpacity * this.opacityScale;
   }
 }

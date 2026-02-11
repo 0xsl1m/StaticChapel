@@ -38,11 +38,12 @@ export class AudioEngine {
     // Mood debouncing - prevent rapid mood switching
     this._currentMood = 'silence';
     this._moodHoldTimer = 0;       // time remaining before mood can change
-    this._moodHoldDuration = 4.0;  // minimum seconds to hold a mood
+    this._moodHoldDuration = 2.0;  // minimum seconds to hold a mood (was 4.0)
     this._candidateMood = null;
     this._candidateTimer = 0;      // how long the candidate mood has been consistent
-    this._candidateThreshold = 1.5; // seconds a new mood must persist before switching
+    this._candidateThreshold = 0.6; // seconds a new mood must persist before switching (was 1.5)
     this._lastUpdateTime = 0;
+    this.forcedMood = null;        // manual mood override (null = auto)
   }
 
   async init() {
@@ -235,20 +236,20 @@ export class AudioEngine {
     // Glitch detection - raised threshold to avoid constant triggering
     if (this.spectralFlux > 0.12) return 'glitch';
 
-    // Energy-based classification
-    if (e < 0.08) {
+    // Energy-based classification (lowered thresholds for more responsive mood changes)
+    if (e < 0.04) {
       if (bass > mid) return 'cold_ambient';
       if (high > mid) return 'cold_ambient';
       return 'warm_ambient';
     }
-    if (e < 0.2) {
+    if (e < 0.12) {
       if (bass > mid * 1.5) return 'bass_heavy';
       if (high > bass) return 'ritualistic';
       return 'balanced_medium';
     }
     // High energy
-    if (bass > mid * 1.5 && e > 0.35) return 'aggressive';
-    if (e > 0.4) return 'chaos';
+    if (bass > mid * 1.5 && e > 0.2) return 'aggressive';
+    if (e > 0.3) return 'chaos';
     return 'euphoric';
   }
 
@@ -257,7 +258,17 @@ export class AudioEngine {
    * Uses debouncing: a new mood must persist for ~1.5s before switching,
    * and once switched, the mood is held for at least 4s.
    */
+  /**
+   * Set a forced mood override. Pass null to return to auto-detection.
+   */
+  setForcedMood(mood) {
+    this.forcedMood = mood || null;
+  }
+
   getMood() {
+    // Manual override bypasses all classification
+    if (this.forcedMood) return this.forcedMood;
+
     const now = performance.now() / 1000;
     const dt = this._lastUpdateTime > 0 ? now - this._lastUpdateTime : 0.016;
     this._lastUpdateTime = now;

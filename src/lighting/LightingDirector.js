@@ -17,25 +17,36 @@
  */
 import * as THREE from 'three';
 
-// --- Helper color constants ---
+// --- ROYGBIV Color Palette — Full spectrum, maximum saturation ---
+// Each color sits at a pure hue position for vivid, punchy lighting.
 const COL = {
-  red:      new THREE.Color(0xff0000),
-  deepRed:  new THREE.Color(0x880000),
-  crimson:  new THREE.Color(0xdc143c),
+  // === ROYGBIV primaries ===
+  red:      new THREE.Color(0xff0000),   // R — pure red
+  orange:   new THREE.Color(0xff5500),   // O — vivid orange (not muddy)
+  yellow:   new THREE.Color(0xffee00),   // Y — electric yellow
+  green:    new THREE.Color(0x00ff00),   // G — pure green
+  blue:     new THREE.Color(0x0055ff),   // B — rich blue (not too dark)
+  indigo:   new THREE.Color(0x4400cc),   // I — deep indigo
+  violet:   new THREE.Color(0x9900ff),   // V — vivid violet
+
+  // === Extended saturated palette ===
+  deepRed:  new THREE.Color(0xcc0000),   // darker red (still saturated)
+  crimson:  new THREE.Color(0xff0044),   // hot pink-red
+  magenta:  new THREE.Color(0xff00cc),   // hot magenta
+  pink:     new THREE.Color(0xff44aa),   // electric pink
+  cyan:     new THREE.Color(0x00ffff),   // pure cyan
+  teal:     new THREE.Color(0x00ddaa),   // vivid teal-green
+  lime:     new THREE.Color(0x88ff00),   // electric lime
+  gold:     new THREE.Color(0xffdd00),   // saturated gold
+  amber:    new THREE.Color(0xffaa00),   // rich amber
+  purple:   new THREE.Color(0xaa00ff),   // vivid purple
+  deepBlue: new THREE.Color(0x0022aa),   // dark but saturated blue
+  iceBlue:  new THREE.Color(0x00aaff),   // vivid sky blue
+
+  // === Utility ===
   white:    new THREE.Color(0xffffff),
   black:    new THREE.Color(0x000000),
-  iceBlue:  new THREE.Color(0x66ccff),
-  cyan:     new THREE.Color(0x00ffff),
-  teal:     new THREE.Color(0x008080),
-  blue:     new THREE.Color(0x0044ff),
-  deepBlue: new THREE.Color(0x000066),
-  purple:   new THREE.Color(0x8b00ff),
-  magenta:  new THREE.Color(0xff00ff),
-  gold:     new THREE.Color(0xffd700),
-  amber:    new THREE.Color(0xffbf00),
-  orange:   new THREE.Color(0xff6600),
-  green:    new THREE.Color(0x00ff41),
-  warmWhite:new THREE.Color(0xffe4b5),
+  warmWhite:new THREE.Color(0xfff0dd),   // warm white (less yellow than before)
 };
 
 // Reusable scratch color to avoid allocations
@@ -122,7 +133,7 @@ export class LightingDirector {
     // y=20, z=19, x spread from -6 to +6, wider angle + longer distance
     for (let i = 0; i < 8; i++) {
       const x = -6 + (12 / 7) * i;
-      const spot = this._createSpot(x, 20, 19, 0, 0, 0, 2.5, Math.PI / 6, 0.4);
+      const spot = this._createSpot(x, 20, 19, 0, 0, 0, 1.0, Math.PI / 6, 0.4);
       this.frontTrussSpots.push(spot);
     }
 
@@ -130,13 +141,13 @@ export class LightingDirector {
     // Left side: x=-9, y=15, z spread from 18 to 26, wider angle
     for (let i = 0; i < 4; i++) {
       const z = 18 + (8 / 3) * i;
-      const spot = this._createSpot(-9, 15, z, 0, 0, 0, 2.0, Math.PI / 5, 0.4);
+      const spot = this._createSpot(-9, 15, z, 0, 0, 0, 0.8, Math.PI / 5, 0.4);
       this.sideTrussSpots.push(spot);
     }
     // Right side: x=+9, y=15, z spread from 18 to 26
     for (let i = 0; i < 4; i++) {
       const z = 18 + (8 / 3) * i;
-      const spot = this._createSpot(9, 15, z, 0, 0, 0, 2.0, Math.PI / 5, 0.4);
+      const spot = this._createSpot(9, 15, z, 0, 0, 0, 0.8, Math.PI / 5, 0.4);
       this.sideTrussSpots.push(spot);
     }
 
@@ -147,7 +158,7 @@ export class LightingDirector {
       const radius = 5;
       const x = Math.cos(angle) * radius;
       const z = 24 + Math.sin(angle) * radius;
-      const par = this._createPoint(x, 1.6, z, 1.0, 15);
+      const par = this._createPoint(x, 1.6, z, 0.4, 15);
       this.parWashes.push(par);
     }
 
@@ -159,7 +170,7 @@ export class LightingDirector {
       [6, 0.5, 28],
     ];
     for (const [lx, ly, lz] of laserPositions) {
-      const spot = this._createSpot(lx, ly, lz, 0, 25, 24, 2.5, Math.PI / 10, 0.3);
+      const spot = this._createSpot(lx, ly, lz, 0, 25, 24, 1.0, Math.PI / 10, 0.3);
       this.laserSpots.push(spot);
     }
 
@@ -310,6 +321,36 @@ export class LightingDirector {
       // Only the current program runs
       this._runProgram(this.currentProgram, time, delta, bandValues, energy, isBeat);
     }
+
+    // --- Global intensity scaling ---
+    // Programs set dramatic intensity values (3.0-8.0) which creates
+    // compounding brightness when 20+ fixtures overlap in the same space.
+    // Rather than changing individual program intensities, we apply a
+    // global post-program multiplier that preserves relative dynamics
+    // while preventing wash-out. This is the ONLY place brightness is
+    // controlled — individual program values remain untouched.
+    const GLOBAL_SCALE = 0.4;
+
+    // Per-fixture-type clamping (applied AFTER scaling)
+    const SPOT_MAX = 1.8;
+    const PAR_MAX = 1.0;
+    const STROBE_MAX = 2.5;
+
+    for (const spot of this.frontTrussSpots) {
+      spot.intensity = Math.min(spot.intensity * GLOBAL_SCALE, SPOT_MAX);
+    }
+    for (const spot of this.sideTrussSpots) {
+      spot.intensity = Math.min(spot.intensity * GLOBAL_SCALE, SPOT_MAX);
+    }
+    for (const par of this.parWashes) {
+      par.intensity = Math.min(par.intensity * GLOBAL_SCALE, PAR_MAX);
+    }
+    for (const laser of this.laserSpots) {
+      laser.intensity = Math.min(laser.intensity * GLOBAL_SCALE, SPOT_MAX);
+    }
+    for (const strobe of this.strobes) {
+      strobe.intensity = Math.min(strobe.intensity * GLOBAL_SCALE, STROBE_MAX);
+    }
   }
 
   /**
@@ -363,11 +404,12 @@ export class LightingDirector {
       );
     }
 
-    // Side truss: crimson cross-beams aimed across the nave floor
+    // Side truss: crimson/orange cross-beams aimed across the nave floor
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
       spot.intensity = 2.0 + Math.sin(time * 15 + i) * 1.0;
-      lerpColor(spot.color, COL.crimson, COL.red, Math.sin(time * 30 + i * 2) * 0.5 + 0.5);
+      const altColor = i % 3 === 0 ? COL.orange : i % 3 === 1 ? COL.crimson : COL.red;
+      lerpColor(spot.color, altColor, COL.red, Math.sin(time * 30 + i * 2) * 0.5 + 0.5);
       const isLeft = i < 4;
       const phase = time * 1.8 + i * 1.2;
       spot.target.position.set(
@@ -425,13 +467,14 @@ export class LightingDirector {
     }
 
     // Side truss: slow cross-nave drift, beams meeting in center aisle
+    const coldSideColors = [COL.iceBlue, COL.cyan, COL.blue, COL.indigo];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
       const isLeft = i < 4;
       const localIdx = isLeft ? i : i - 4;
       const phase = slowSweep + localIdx * 0.7;
       spot.intensity = 0.4 + Math.sin(time * 0.5 + i * 0.8) * 0.3;
-      lerpColor(spot.color, COL.iceBlue, COL.cyan, Math.sin(phase * 0.5) * 0.5 + 0.5);
+      lerpColor(spot.color, coldSideColors[i % coldSideColors.length], COL.cyan, Math.sin(phase * 0.5) * 0.5 + 0.5);
       spot.target.position.set(
         (isLeft ? 1 : -1) * Math.sin(phase * 0.8) * 4,
         0,
@@ -469,13 +512,13 @@ export class LightingDirector {
   // =========================================================================
 
   _program3_VoidPulse(time, delta, bandValues, energy, isBeat) {
-    const brandColors = [COL.purple, COL.gold, COL.cyan];
+    const brandColors = [COL.violet, COL.gold, COL.cyan, COL.magenta, COL.blue];
     const rotSpeed = time * 1.2;
 
-    // Front truss: rotating color wheel — circular sweep on nave floor
+    // Front truss: rotating ROYGBIV color wheel — circular sweep on nave floor
     for (let i = 0; i < this.frontTrussSpots.length; i++) {
       const spot = this.frontTrussSpots[i];
-      const colorIdx = Math.floor((i + time * 0.5) % 3);
+      const colorIdx = Math.floor((i + time * 0.5) % brandColors.length);
       spot.color.copy(brandColors[colorIdx]);
       spot.intensity = 1.2 + energy * 1.5 + (isBeat ? 1.5 : 0);
 
@@ -487,12 +530,13 @@ export class LightingDirector {
       );
     }
 
-    // Side truss: alternating purple/cyan cross-beams
+    // Side truss: alternating violet/cyan/magenta cross-beams
+    const sideColors = [COL.violet, COL.cyan, COL.magenta, COL.iceBlue];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
       const isLeft = i < 4;
       const phase = rotSpeed * 0.8 + i * 1.1;
-      spot.color.copy(i % 2 === 0 ? COL.purple : COL.cyan);
+      spot.color.copy(sideColors[i % sideColors.length]);
       spot.intensity = 0.8 + energy * 1.5;
       spot.target.position.set(
         (isLeft ? 1 : -1) * (2 + Math.sin(phase) * 5),
@@ -501,17 +545,19 @@ export class LightingDirector {
       );
     }
 
-    // PAR washes: gold-purple cycle
+    // PAR washes: gold-violet-cyan cycle
     for (let i = 0; i < this.parWashes.length; i++) {
       const t = Math.sin(time * 1.5 + i * 0.8) * 0.5 + 0.5;
-      lerpColor(this.parWashes[i].color, COL.purple, COL.gold, t);
+      const parColors = [COL.violet, COL.gold, COL.cyan, COL.magenta];
+      const idx = Math.floor((time * 0.3 + i * 0.5) % parColors.length);
+      lerpColor(this.parWashes[i].color, parColors[idx], parColors[(idx + 1) % parColors.length], t);
       this.parWashes[i].intensity = 0.6 + energy * 0.8;
     }
 
-    // Laser spots: cyan beams to ceiling, pulsing with energy
+    // Laser spots: cyan/violet beams to ceiling, pulsing with energy
     for (let i = 0; i < this.laserSpots.length; i++) {
       const laser = this.laserSpots[i];
-      laser.color.copy(COL.cyan);
+      laser.color.copy(i % 2 === 0 ? COL.cyan : COL.violet);
       laser.intensity = 0.8 + energy * 2.0;
       laser.target.position.set(
         laser.position.x + Math.sin(time * 2 + i * 1.5) * 2,
@@ -557,7 +603,7 @@ export class LightingDirector {
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
       spot.intensity = isBeat ? 4.0 : baseLevel * 0.5;
-      spot.color.copy(isBeat ? COL.white : COL.deepBlue);
+      spot.color.copy(isBeat ? COL.white : COL.indigo);
       if (isBeat) {
         spot.target.position.set(
           (Math.random() - 0.5) * 12,
@@ -567,9 +613,9 @@ export class LightingDirector {
       }
     }
 
-    // PAR washes: faint deep blue charge
+    // PAR washes: faint indigo charge, flash to cyan on beat
     for (const par of this.parWashes) {
-      par.color.copy(isBeat ? COL.white : COL.deepBlue);
+      par.color.copy(isBeat ? COL.cyan : COL.indigo);
       par.intensity = isBeat ? 3.0 : baseLevel * 0.3;
     }
 
@@ -611,11 +657,12 @@ export class LightingDirector {
     }
 
     // Side truss: warm cross-beams sweeping nave center
+    const warmSideColors = [COL.amber, COL.orange, COL.gold, COL.yellow];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
       const isLeft = i < 4;
       const phase = time * 0.3 + i * 1.2;
-      lerpColor(spot.color, COL.warmWhite, COL.amber, Math.sin(phase) * 0.5 + 0.5);
+      lerpColor(spot.color, warmSideColors[i % warmSideColors.length], COL.amber, Math.sin(phase) * 0.5 + 0.5);
       spot.intensity = 0.4 + breath * 0.5;
       spot.target.position.set(
         (isLeft ? 1 : -1) * (1 + Math.sin(phase) * 4),
@@ -653,7 +700,7 @@ export class LightingDirector {
   // =========================================================================
 
   _program6_Hellfire(time, delta, bandValues, energy, isBeat) {
-    const hellColors = [COL.orange, COL.red, COL.magenta, COL.crimson];
+    const hellColors = [COL.red, COL.orange, COL.yellow, COL.magenta, COL.crimson];
     const rapidCycle = time * 25;
 
     // Front truss: chaotic scatter across nave floor, on-beat snap to random positions
@@ -675,10 +722,12 @@ export class LightingDirector {
       }
     }
 
-    // Side truss: magenta/orange rapid swap, scatter across floor
+    // Side truss: magenta/orange/yellow rapid swap, scatter across floor
+    const sideChaos = [COL.magenta, COL.orange, COL.yellow, COL.crimson];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
-      spot.color.copy(Math.sin(time * 20 + i * 3) > 0 ? COL.magenta : COL.orange);
+      const cIdx = Math.floor((rapidCycle * 0.5 + i * 3.1) % sideChaos.length);
+      spot.color.copy(sideChaos[cIdx]);
       spot.intensity = 3.0 + energy * 2.0;
       if (isBeat) {
         spot.target.position.set(
@@ -696,10 +745,11 @@ export class LightingDirector {
       this.parWashes[i].intensity = 3.0 + energy * 2.0;
     }
 
-    // Laser spots: max output, red/orange shafts to ceiling
+    // Laser spots: max output, red/orange/yellow shafts to ceiling
+    const laserChaos = [COL.red, COL.orange, COL.yellow, COL.magenta];
     for (let i = 0; i < this.laserSpots.length; i++) {
       const laser = this.laserSpots[i];
-      laser.color.copy(i % 2 === 0 ? COL.red : COL.orange);
+      laser.color.copy(laserChaos[i % laserChaos.length]);
       laser.intensity = 4.0;
       laser.target.position.set(
         laser.position.x + Math.sin(time * 5 + i * 2) * 3,
@@ -760,7 +810,7 @@ export class LightingDirector {
     for (let i = 0; i < this.frontTrussSpots.length; i++) {
       const spot = this.frontTrussSpots[i];
       const wave = Math.sin(waveSpeed - i * 0.6) * 0.5 + 0.5;
-      lerpColor(spot.color, COL.deepBlue, COL.teal, wave);
+      lerpColor(spot.color, COL.blue, COL.teal, wave);
       spot.intensity = 0.5 + bassNorm * 3.0 * wave;
       spot.target.position.set(
         Math.sin(waveSpeed - i * 0.6) * 8,
@@ -769,12 +819,12 @@ export class LightingDirector {
       );
     }
 
-    // Side truss: deep blue/green wave, cross-beams on floor
+    // Side truss: indigo/green wave, cross-beams on floor
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
       const isLeft = i < 4;
       const wave = Math.sin(waveSpeed - i * 0.8 + Math.PI) * 0.5 + 0.5;
-      lerpColor(spot.color, COL.blue, COL.green, wave * 0.5);
+      lerpColor(spot.color, COL.indigo, COL.green, wave);
       spot.intensity = 0.5 + bassNorm * 2.5;
       spot.target.position.set(
         (isLeft ? 1 : -1) * (1 + Math.sin(waveSpeed * 0.7 + i * 1.3) * 5),
@@ -783,17 +833,17 @@ export class LightingDirector {
       );
     }
 
-    // PAR washes: teal-green wave propagation
+    // PAR washes: teal-green-cyan wave propagation
     for (let i = 0; i < this.parWashes.length; i++) {
       const wave = Math.sin(waveSpeed - i * 0.7) * 0.5 + 0.5;
-      lerpColor(this.parWashes[i].color, COL.teal, COL.green, wave);
+      lerpColor(this.parWashes[i].color, COL.teal, COL.lime, wave);
       this.parWashes[i].intensity = 0.3 + bassNorm * 2.5 * wave;
     }
 
-    // Laser spots: deep blue shafts to ceiling, pulse with sub-bass
+    // Laser spots: indigo/blue shafts to ceiling, pulse with sub-bass
     for (let i = 0; i < this.laserSpots.length; i++) {
       const laser = this.laserSpots[i];
-      laser.color.copy(COL.blue);
+      laser.color.copy(i % 2 === 0 ? COL.blue : COL.indigo);
       laser.intensity = 0.5 + (bandValues.subBass || 0) * 4.0;
       laser.target.position.set(
         laser.position.x + Math.sin(time + i) * 1.5,
@@ -909,12 +959,12 @@ export class LightingDirector {
   _program11_GothicMass(time, delta, bandValues, energy, isBeat) {
     const slowCircle = time * 0.5;
     const incenseBreath = Math.sin(time * 0.7) * 0.5 + 0.5;
-    const churchColors = [COL.gold, COL.purple, COL.deepRed];
+    const churchColors = [COL.gold, COL.violet, COL.crimson, COL.indigo, COL.amber];
 
     // Front truss: slow majestic circular sweep on nave floor
     for (let i = 0; i < this.frontTrussSpots.length; i++) {
       const spot = this.frontTrussSpots[i];
-      const cIdx = Math.floor((i + time * 0.2) % 3);
+      const cIdx = Math.floor((i + time * 0.2) % churchColors.length);
       spot.color.copy(churchColors[cIdx]);
       spot.intensity = 0.8 + incenseBreath * 0.8 + energy * 0.5;
 
@@ -927,12 +977,13 @@ export class LightingDirector {
       );
     }
 
-    // Side truss: purple/gold alternating cross-beams
+    // Side truss: violet/gold/indigo alternating cross-beams
+    const gothicSideColors = [COL.violet, COL.gold, COL.indigo, COL.amber];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
       const isLeft = i < 4;
       const phase = slowCircle + i * 0.8;
-      spot.color.copy(i % 2 === 0 ? COL.purple : COL.gold);
+      spot.color.copy(gothicSideColors[i % gothicSideColors.length]);
       spot.intensity = 0.6 + incenseBreath * 0.6;
       spot.target.position.set(
         (isLeft ? 1 : -1) * (2 + Math.sin(phase) * 4),
@@ -948,10 +999,10 @@ export class LightingDirector {
       this.parWashes[i].intensity = 0.3 + incenseBreath * 0.5;
     }
 
-    // Laser spots: deep purple shafts to ceiling
+    // Laser spots: violet/indigo shafts to ceiling
     for (let i = 0; i < this.laserSpots.length; i++) {
       const laser = this.laserSpots[i];
-      laser.color.copy(COL.purple);
+      laser.color.copy(i % 2 === 0 ? COL.violet : COL.indigo);
       laser.intensity = 0.6 + incenseBreath * 0.4;
       laser.target.position.set(
         laser.position.x + Math.sin(time * 0.3 + i) * 1,
@@ -985,11 +1036,13 @@ export class LightingDirector {
       return;
     }
 
-    // Front truss: white/cyan flickering scatter on nave floor
+    // Front truss: white/cyan/violet flickering scatter on nave floor
+    const glitchColors = [COL.white, COL.cyan, COL.violet, COL.iceBlue, COL.magenta];
     for (let i = 0; i < this.frontTrussSpots.length; i++) {
       const spot = this.frontTrussSpots[i];
       const flicker = glitchRand(i * 7.1);
-      lerpColor(spot.color, COL.white, COL.cyan, flicker);
+      const gIdx = Math.floor(glitchRand(i * 4.4) * glitchColors.length);
+      spot.color.copy(glitchColors[gIdx]);
       spot.intensity = flicker > 0.3 ? (1.0 + energy * 3.0) * flicker : 0;
       spot.target.position.set(
         (glitchRand(i * 3.3) - 0.5) * 14,

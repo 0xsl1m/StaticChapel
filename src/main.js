@@ -6,13 +6,14 @@ import * as THREE from 'three';
 import { Cathedral } from './cathedral.js';
 import { PipeOrgan } from './organ.js';
 import { ConcertStage } from './stage.js';
+import { SoundSystem } from './sound-system.js';
 import { DJBooth } from './dj.js';
 import { AudioEngine } from './audio/AudioEngine.js';
 import { PlaylistManager } from './audio/PlaylistManager.js';
 import { LightingDirector } from './lighting/LightingDirector.js';
 import { Controls } from './utils/Controls.js';
 import { XRManager } from './utils/XRManager.js';
-import { DustMotes } from './vfx/ParticleSystem.js';
+// DustMotes removed — eliminated to reduce load time
 import { CandleSystem } from './vfx/CandleSystem.js';
 import { FogSystem } from './vfx/FogSystem.js';
 import { GodRays } from './vfx/GodRays.js';
@@ -20,13 +21,14 @@ import { PostProcessing } from './vfx/PostProcessing.js';
 import { PlayerUI } from './ui/PlayerUI.js';
 import { SettingsPanel } from './ui/SettingsPanel.js';
 import { TextureGenerator } from './utils/TextureGenerator.js';
+import { ClubDecor } from './club-decor.js';
 
 // --- Globals ---
 let renderer, scene, camera, clock;
-let cathedral, organ, stage, djBooth;
+let cathedral, organ, stage, soundSystem, djBooth, clubDecor;
 let audioEngine, playlist, lightingDirector;
 let controls, xrManager;
-let dustMotes, candles, fogSystem, godRays, postProcessing;
+let candles, fogSystem, godRays, postProcessing;
 let playerUI, settingsPanel;
 let isInitialized = false;
 let elapsedTime = 0;
@@ -35,7 +37,6 @@ let elapsedTime = 0;
 let settings = {
   fogDensity: 0.4,
   lightIntensity: 0.7,
-  particleCount: 0.6,
   cameraFov: 70,
   godRays: true,
   candles: true,
@@ -69,7 +70,7 @@ async function init() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.5;
+  renderer.toneMappingExposure = 0.85;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.xr.enabled = true;
   document.getElementById('app').appendChild(renderer.domElement);
@@ -122,6 +123,16 @@ async function init() {
   // Phase 3: Concert Stage
   stage = new ConcertStage(scene, { metal: metalTexture });
 
+  updateLoading(44, 'Installing sound system...');
+
+  // Sound System (Void Acoustics PA rig)
+  soundSystem = new SoundSystem(scene, { metal: metalTexture });
+
+  updateLoading(47, 'Setting up club decor...');
+
+  // Club decor (chandeliers, furniture, bar, static VFX)
+  clubDecor = new ClubDecor(scene, { metal: metalTexture });
+
   updateLoading(50, 'Creating DJ booth...');
 
   // Phase 3: DJ Booth
@@ -134,11 +145,6 @@ async function init() {
 
   // Connect stage fixtures to lighting engine for visual sync
   stage.setLightingDirector(lightingDirector);
-
-  updateLoading(60, 'Spawning dust motes...');
-
-  // Phase 5: VFX
-  dustMotes = new DustMotes(scene, 3000);
 
   updateLoading(65, 'Lighting candles...');
   candles = new CandleSystem(scene);
@@ -173,6 +179,10 @@ async function init() {
   settingsPanel.onChange = (newSettings) => {
     settings = newSettings;
     applySettings();
+    // Wire mood override to audio engine
+    if (audioEngine) {
+      audioEngine.setForcedMood(settings.forcedMood);
+    }
   };
 
   updateLoading(90, 'Checking VR support...');
@@ -183,7 +193,28 @@ async function init() {
   // Handle resize
   window.addEventListener('resize', onResize);
 
-  updateLoading(100, 'Ready.');
+  updateLoading(92, 'Compiling shaders...');
+
+  // --- GPU warm-up pass ---
+  // Three.js compiles shaders & uploads geometry on first render.
+  // Do it NOW so the user doesn't freeze when they press Enter.
+  // We render one frame to an off-screen state, then clear it.
+  await new Promise(resolve => {
+    // Give the browser a frame to paint the "Compiling shaders" text
+    requestAnimationFrame(() => {
+      // Force-compile every material in the scene
+      renderer.compile(scene, camera);
+
+      // Render one full frame (forces remaining GPU uploads)
+      renderer.render(scene, camera);
+
+      // Also compile the vignette overlay scene
+      renderer.compile(postProcessing.vignetteScene, postProcessing.vignetteCamera);
+
+      updateLoading(100, 'Ready.');
+      resolve();
+    });
+  });
 
   // Show enter button
   if (enterBtn) enterBtn.style.display = 'block';
@@ -267,6 +298,12 @@ function animate() {
   // Update concert stage (LED panels, truss lights)
   stage.update(elapsedTime, bandValues, energy);
 
+  // Update sound system (subs + line arrays)
+  soundSystem.update(elapsedTime, bandValues, energy);
+
+  // Update club decor (chandeliers, furniture, static arcs)
+  clubDecor.update(elapsedTime, bandValues, energy, isBeat);
+
   // Update DJ booth (head bobbing, animations)
   djBooth.update(elapsedTime, isBeat, energy);
 
@@ -274,8 +311,6 @@ function animate() {
   lightingDirector.update(elapsedTime, delta, mood, bandValues, energy, isBeat);
 
   // Update VFX
-  dustMotes.update(delta, energy);
-
   if (settings.candles) {
     candles.update(elapsedTime);
   }

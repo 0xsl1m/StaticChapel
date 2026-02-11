@@ -67,80 +67,97 @@ export class ConcertStage {
   }
 
   // ==================================================================
-  //  LED PANEL WALL  (3 cols x 5 rows, 15m wide x 10m tall)
+  //  LED PANELS — Pro stage V-shape fan layout
+  //  Center screen + angled wing panels that don't block the organ
   // ==================================================================
   createLEDWall() {
-    const totalW = 15;
-    const totalH = 10;
-    const panelW = totalW / this.ledColumns;
-    const panelH = totalH / this.ledRows;
-    const panelZ = STAGE_BACK_Z - 2.5; // well in front of organ pipes
-    const panelBaseY = STAGE_Y + 0.5;  // just above stage surface
+    const canvasRes = 128;
+    const panelZ = STAGE_BACK_Z - 3.0; // z=26, pulled forward to prevent wall clipping
 
-    const canvasRes = 128; // resolution per panel canvas
-
-    for (let col = 0; col < this.ledColumns; col++) {
-      for (let row = 0; row < this.ledRows; row++) {
-        // Create a canvas for this panel
-        const canvas = document.createElement('canvas');
-        canvas.width = canvasRes;
-        canvas.height = canvasRes;
-        const ctx = canvas.getContext('2d');
-
-        // Initial fill: dark
-        ctx.fillStyle = '#050510';
-        ctx.fillRect(0, 0, canvasRes, canvasRes);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-
-        const panelMat = new THREE.MeshBasicMaterial({
-          map: texture,
-          toneMapped: false,
-        });
-
-        const panelGeo = new THREE.PlaneGeometry(panelW - 0.1, panelH - 0.1);
-        const panelMesh = new THREE.Mesh(panelGeo, panelMat);
-
-        const x = (col - (this.ledColumns - 1) / 2) * panelW;
-        const y = panelBaseY + panelH / 2 + row * panelH;
-
-        panelMesh.position.set(x, y, panelZ);
-        panelMesh.rotation.y = Math.PI; // face toward audience (-Z)
-        this.group.add(panelMesh);
-
-        this.ledPanels.push({ canvas, ctx, texture, mesh: panelMesh, col, row });
-      }
-    }
-
-    // Thin bezel frame around the entire LED wall
     const frameMat = new THREE.MeshStandardMaterial({
-      color: 0x111111,
-      roughness: 0.6,
-      metalness: 0.4,
+      color: 0x111111, roughness: 0.6, metalness: 0.4,
     });
 
-    // Top bar
-    const topBar = new THREE.Mesh(new THREE.BoxGeometry(totalW + 0.3, 0.15, 0.15), frameMat);
-    topBar.position.set(0, panelBaseY + totalH + 0.05, panelZ);
-    this.group.add(topBar);
+    // Helper: create one LED panel with canvas + frame
+    const makePanel = (w, h, x, y, z, rotY, col, row) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasRes;
+      canvas.height = canvasRes;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#050510';
+      ctx.fillRect(0, 0, canvasRes, canvasRes);
 
-    // Bottom bar
-    const botBar = topBar.clone();
-    botBar.position.set(0, panelBaseY - 0.05, panelZ);
-    this.group.add(botBar);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
 
-    // Side bars
+      const panelMat = new THREE.MeshBasicMaterial({ map: texture, toneMapped: true });
+      const panelGeo = new THREE.PlaneGeometry(w, h);
+      const panelMesh = new THREE.Mesh(panelGeo, panelMat);
+      panelMesh.position.set(x, y, z);
+      panelMesh.rotation.y = Math.PI + rotY; // base: face audience, + angle
+      this.group.add(panelMesh);
+
+      // Thin bezel frame per panel
+      const frameGeo = new THREE.EdgesGeometry(panelGeo);
+      const frameLine = new THREE.LineSegments(frameGeo, new THREE.LineBasicMaterial({ color: 0x222222 }));
+      frameLine.position.copy(panelMesh.position);
+      frameLine.rotation.copy(panelMesh.rotation);
+      this.group.add(frameLine);
+
+      this.ledPanels.push({ canvas, ctx, texture, mesh: panelMesh, col, row });
+    };
+
+    // --- CENTER SCREEN: 6m wide × 4m tall ---
+    // Sits low, organ pipes rise above it
+    makePanel(6, 4, 0, STAGE_Y + 2.5, panelZ, 0, 1, 0);
+
+    // --- UPPER WING PANELS: 2 per side, angled outward ---
+    // These fan out from the center screen, creating a V-shape
+    const upperW = 3.0;
+    const upperH = 3.0;
+    const upperY = STAGE_Y + 7.5; // above center screen
+    const upperAngle = 0.5; // ~30 degrees outward
+
     [-1, 1].forEach(side => {
-      const sideBar = new THREE.Mesh(new THREE.BoxGeometry(0.15, totalH + 0.3, 0.15), frameMat);
-      sideBar.position.set(side * (totalW / 2 + 0.1), panelBaseY + totalH / 2, panelZ);
-      this.group.add(sideBar);
+      // Inner upper wing
+      makePanel(upperW, upperH,
+        side * 4.5, upperY, panelZ + 0.3,
+        side * upperAngle,
+        side > 0 ? 2 : 0, 1);
+      // Outer upper wing (more angled)
+      makePanel(upperW * 0.8, upperH * 0.8,
+        side * 7.5, upperY - 0.5, panelZ + 1.0,
+        side * (upperAngle + 0.3),
+        side > 0 ? 2 : 0, 2);
     });
 
-    // LED wall glow — PointLight in front of the wall casting colored light into the nave
-    this.ledBacklight = new THREE.PointLight(0x4444ff, 2.0, 30, 1);
-    this.ledBacklight.position.set(0, panelBaseY + totalH / 2, panelZ - 1.0);
+    // --- LOWER WING PANELS: 2 per side, flanking center screen ---
+    const lowerW = 2.5;
+    const lowerH = 2.5;
+    const lowerY = STAGE_Y + 3.0;
+    const lowerAngle = 0.7; // ~40 degrees outward
+
+    [-1, 1].forEach(side => {
+      // Inner lower wing
+      makePanel(lowerW, lowerH,
+        side * 4.5, lowerY, panelZ + 0.2,
+        side * lowerAngle,
+        side > 0 ? 2 : 0, 3);
+      // Outer lower wing
+      makePanel(lowerW * 0.7, lowerH * 0.7,
+        side * 7.0, lowerY - 0.3, panelZ + 0.8,
+        side * (lowerAngle + 0.35),
+        side > 0 ? 2 : 0, 4);
+    });
+
+    // Update column/row counts for updateLEDPanels iteration
+    this.ledColumns = 3;
+    this.ledRows = 5;
+
+    // LED wall glow — reduced intensity
+    this.ledBacklight = new THREE.PointLight(0x4444ff, 0.18, 16, 1.5);
+    this.ledBacklight.position.set(0, STAGE_Y + 5, panelZ - 1.0);
     this.group.add(this.ledBacklight);
   }
 
@@ -158,8 +175,9 @@ export class ConcertStage {
     const trussMat = new THREE.MeshStandardMaterial(trussProps);
 
     // Front truss: horizontal bar across the front of the stage, elevated
+    // Truss bar at z=19.5 — aligned with sub stacks so outer legs hide inside them.
     const frontTrussY = STAGE_Y + 8;
-    const frontTrussZ = STAGE_FRONT_Z - 0.5;
+    const frontTrussZ = 19.5; // matches SUB_Z in sound-system.js — legs inside subs
     this.frontTruss = this.createTrussBar(STAGE_WIDTH + 2, frontTrussY, frontTrussZ, 'x', trussMat);
 
     // Side trusses: vertical-ish bars running along the sides from front to back
@@ -169,15 +187,18 @@ export class ConcertStage {
     this.rightTruss = this.createTrussBar(sideTrussLength, sideTrussY, 0, 'z', trussMat, (STAGE_WIDTH / 2 + 0.5));
 
     // Vertical support legs for front truss (4 uprights)
+    // Outer legs at x=±8.5, z=19.5 — centered inside sub stacks (SUB_Z=19.5)
+    // Inner legs at x=±3.75, z=19.5 — on stage
     const legPositions = [
-      [-(STAGE_WIDTH / 2 + 0.5), frontTrussZ],
+      [-8.5,                      frontTrussZ],  // hidden in left sub stack
       [-(STAGE_WIDTH / 4),        frontTrussZ],
       [(STAGE_WIDTH / 4),         frontTrussZ],
-      [(STAGE_WIDTH / 2 + 0.5),  frontTrussZ],
+      [8.5,                       frontTrussZ],   // hidden in right sub stack
     ];
 
     legPositions.forEach(([lx, lz]) => {
-      this.createTrussLeg(lx, STAGE_Y, frontTrussY, lz, trussMat);
+      const isOuterLeg = Math.abs(lx) > 8;  // outer legs hidden in sub stacks — no plate
+      this.createTrussLeg(lx, STAGE_Y, frontTrussY, lz, trussMat, isOuterLeg);
     });
 
     // Vertical support legs for side trusses (2 each)
@@ -258,18 +279,20 @@ export class ConcertStage {
   /**
    * Create a vertical truss leg (support pillar)
    */
-  createTrussLeg(x, baseY, topY, z, mat) {
+  createTrussLeg(x, baseY, topY, z, mat, skipPlate = false) {
     const height = topY - baseY;
     const legGeo = new THREE.BoxGeometry(0.12, height, 0.12);
     const leg = new THREE.Mesh(legGeo, mat);
     leg.position.set(x, baseY + height / 2, z);
     this.group.add(leg);
 
-    // Small base plate
-    const plateGeo = new THREE.BoxGeometry(0.4, 0.05, 0.4);
-    const plate = new THREE.Mesh(plateGeo, mat);
-    plate.position.set(x, baseY + 0.025, z);
-    this.group.add(plate);
+    if (!skipPlate) {
+      // Small base plate (omitted for legs hidden inside sub stacks)
+      const plateGeo = new THREE.BoxGeometry(0.4, 0.05, 0.4);
+      const plate = new THREE.Mesh(plateGeo, mat);
+      plate.position.set(x, baseY + 0.025, z);
+      this.group.add(plate);
+    }
   }
 
   // ==================================================================
@@ -277,7 +300,7 @@ export class ConcertStage {
   // ==================================================================
   createLightFixtures() {
     const frontTrussY = STAGE_Y + 8;
-    const frontTrussZ = STAGE_FRONT_Z - 0.5;
+    const frontTrussZ = 19.5; // matches truss + sub stack position
     const sideTrussY = STAGE_Y + 7;
 
     // 8 fixtures on front truss, evenly spaced
@@ -397,7 +420,7 @@ export class ConcertStage {
     const coreMat = new THREE.MeshBasicMaterial({
       color: 0xFFFFFF,
       transparent: true,
-      opacity: 0.06,
+      opacity: 0.04,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
@@ -483,16 +506,22 @@ export class ConcertStage {
   }
 
   // ------------------------------------------------------------------
-  //  LED Panel animation (audio-reactive color wash)
+  //  LED Panel animation — 6 distinct programs, cycling every ~12 seconds
   // ------------------------------------------------------------------
   updateLEDPanels(time, bandValues, energy) {
     const bass = bandValues.bass || 0;
     const mid = bandValues.mid || 0;
     const highMid = bandValues.highMid || 0;
     const treble = bandValues.treble || 0;
+    const subBass = bandValues.subBass || 0;
 
-    // Idle animation factor: always-on gentle movement even without audio
-    const idlePulse = Math.sin(time * 1.2) * 0.5 + 0.5; // 0-1 slow pulse
+    // Cycle through 6 programs with smooth crossfade
+    const programDuration = 12.0;
+    const crossfadeDuration = 2.0;
+    const totalCycle = programDuration * 6;
+    const cycleTime = time % totalCycle;
+    const programIndex = Math.floor(cycleTime / programDuration) % 6;
+    const programPhase = (cycleTime % programDuration) / programDuration;
 
     for (let i = 0; i < this.ledPanels.length; i++) {
       const panel = this.ledPanels[i];
@@ -500,59 +529,270 @@ export class ConcertStage {
       const w = canvas.width;
       const h = canvas.height;
 
-      // Normalized position within the wall
-      const nx = col / (this.ledColumns - 1);     // 0..1
-      const ny = row / (this.ledRows - 1);         // 0..1 (bottom to top)
+      const nx = col / Math.max(1, this.ledColumns - 1);
+      const ny = row / Math.max(1, this.ledRows - 1);
 
-      // Color wash: hue shifts with time + position, saturation from energy
-      const hue = ((time * 20) + nx * 120 + ny * 80) % 360;
-      const sat = 60 + energy * 40;
-      // Higher base luminosity (25%) + idle pulse so it's always visible
-      const lum = 25 + idlePulse * 10 + energy * 30 + bass * 20;
-
-      // Fill with base color
-      ctx.fillStyle = `hsl(${hue}, ${sat}%, ${lum}%)`;
+      // Dark base — prevents washout
+      ctx.fillStyle = '#040408';
       ctx.fillRect(0, 0, w, h);
 
-      // Idle: slow diagonal gradient sweep (always on)
-      const gradX = ((time * 0.3 + nx * 0.5) % 1) * w;
-      const gradW = w * 0.4;
-      ctx.fillStyle = `hsla(${(hue + 60) % 360}, 70%, ${30 + idlePulse * 15}%, 0.3)`;
-      ctx.fillRect(gradX - gradW / 2, 0, gradW, h);
-
-      // Vertical scanning bar effect keyed to mid frequencies
-      const scanX = ((time * 0.5 + col * 0.3) % 1) * w;
-      const scanWidth = 10 + mid * 30;
-      ctx.fillStyle = `hsla(${(hue + 180) % 360}, 80%, ${40 + highMid * 40}%, ${0.3 + mid * 0.5})`;
-      ctx.fillRect(scanX - scanWidth / 2, 0, scanWidth, h);
-
-      // Horizontal pulse keyed to bass
-      if (bass > 0.3) {
-        const pulseY = ((time * 0.8 + row * 0.2) % 1) * h;
-        const pulseH = 5 + bass * 25;
-        ctx.fillStyle = `hsla(${(hue + 90) % 360}, 90%, ${50 + bass * 30}%, ${bass * 0.6})`;
-        ctx.fillRect(0, pulseY - pulseH / 2, w, pulseH);
-      }
-
-      // Treble sparkle dots
-      if (treble > 0.2) {
-        const dotCount = Math.floor(treble * 8);
-        ctx.fillStyle = `rgba(255, 255, 255, ${treble * 0.8})`;
-        for (let d = 0; d < dotCount; d++) {
-          const dx = Math.random() * w;
-          const dy = Math.random() * h;
-          ctx.beginPath();
-          ctx.arc(dx, dy, 2 + Math.random() * 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      switch (programIndex) {
+        case 0: this._ledProgram_ColorWash(ctx, w, h, time, nx, ny, bass, mid, energy); break;
+        case 1: this._ledProgram_VerticalBars(ctx, w, h, time, nx, ny, bass, mid, highMid, energy); break;
+        case 2: this._ledProgram_Strobe(ctx, w, h, time, nx, ny, bass, treble, energy); break;
+        case 3: this._ledProgram_RadialPulse(ctx, w, h, time, nx, ny, subBass, bass, energy); break;
+        case 4: this._ledProgram_Pixel(ctx, w, h, time, nx, ny, mid, highMid, treble, energy); break;
+        case 5: this._ledProgram_WaveForm(ctx, w, h, time, nx, ny, bass, mid, highMid, energy); break;
       }
 
       texture.needsUpdate = true;
     }
 
-    // Update LED wall backlight glow
     if (this.ledBacklight) {
-      this.ledBacklight.intensity = 1.5 + energy * 3.0 + idlePulse * 0.5;
+      this.ledBacklight.intensity = 0.15 + energy * 0.25;
+    }
+  }
+
+  // ==================================================================
+  //  PRO VJ LED PROGRAMS — Resolume / VDMX inspired
+  //
+  //  Design principles:
+  //  - Deep saturated gradients, not flat fills
+  //  - Panel coherence: nx/ny creates unified image across all panels
+  //  - Beat-reactive intensity with smooth falloff
+  //  - Geometric patterns: tunnels, prisms, Lissajous, kaleidoscope
+  //  - Professional color palettes (not rainbow spam)
+  // ==================================================================
+
+  // --- Program 0: TUNNEL ZOOM — depth illusion zooming toward viewer ---
+  _ledProgram_ColorWash(ctx, w, h, time, nx, ny, bass, mid, energy) {
+    const cx = w / 2, cy = h / 2;
+    // Color palette: deep magenta → cyan shift over time
+    const baseHue = (time * 8) % 360;
+    const ringCount = 10;
+    for (let r = ringCount - 1; r >= 0; r--) {
+      const phase = ((time * 0.8 + r * 0.1) % 1);
+      const scale = 0.05 + phase * 1.2;
+      const rw = w * scale * 0.6;
+      const rh = h * scale * 0.6;
+      const hue = (baseHue + r * 25 + nx * 40) % 360;
+      const lum = 8 + (1 - phase) * 30 * (0.4 + energy * 0.6) + bass * 15;
+      const alpha = (1 - phase * 0.7) * (0.5 + energy * 0.4);
+      ctx.fillStyle = `hsla(${hue}, 90%, ${Math.min(55, lum)}%, ${Math.min(0.9, alpha)})`;
+      ctx.fillRect(cx - rw / 2, cy - rh / 2, rw, rh);
+    }
+    // Beat flash overlay
+    if (bass > 0.5) {
+      ctx.fillStyle = `hsla(${baseHue}, 100%, 70%, ${(bass - 0.5) * 0.5})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  // --- Program 1: GRADIENT SWEEP — smooth horizontal wipe with layered hues ---
+  _ledProgram_VerticalBars(ctx, w, h, time, nx, ny, bass, mid, highMid, energy) {
+    // 3-color gradient that sweeps across the panel array (coherent across panels)
+    const globalX = nx; // 0-1 across all panels left to right
+    const sweep = (time * 0.15) % 1;
+    const hue1 = (time * 12) % 360;
+    const hue2 = (hue1 + 120) % 360;
+    const hue3 = (hue1 + 240) % 360;
+
+    for (let x = 0; x < w; x++) {
+      const t = x / w;
+      const globalT = (globalX + t * 0.3 + sweep) % 1;
+      // Tri-color blend
+      let hue, sat;
+      if (globalT < 0.33) {
+        hue = hue1 + (hue2 - hue1) * (globalT / 0.33);
+        sat = 85;
+      } else if (globalT < 0.66) {
+        hue = hue2 + (hue3 - hue2) * ((globalT - 0.33) / 0.33);
+        sat = 90;
+      } else {
+        hue = hue3 + (hue1 + 360 - hue3) * ((globalT - 0.66) / 0.34);
+        sat = 85;
+      }
+      const lum = 10 + energy * 25 + mid * 15 + Math.sin(time * 4 + t * 6) * 5;
+      ctx.fillStyle = `hsl(${hue % 360}, ${sat}%, ${Math.min(55, lum)}%)`;
+      ctx.fillRect(x, 0, 1, h);
+    }
+    // Horizontal energy bars on beat
+    if (highMid > 0.3) {
+      const barCount = 3 + Math.floor(energy * 4);
+      for (let b = 0; b < barCount; b++) {
+        const by = ((time * 0.5 + b * 0.15 + ny * 0.3) % 1) * h;
+        ctx.fillStyle = `hsla(0, 0%, 95%, ${highMid * 0.35})`;
+        ctx.fillRect(0, by, w, 2);
+      }
+    }
+  }
+
+  // --- Program 2: PRISM FRACTURE — kaleidoscope triangles, bass-reactive ---
+  _ledProgram_Strobe(ctx, w, h, time, nx, ny, bass, treble, energy) {
+    const cx = w / 2, cy = h / 2;
+    const baseHue = (time * 15) % 360;
+    const segments = 6;
+    const baseAngle = time * 0.3 + nx * Math.PI;
+
+    for (let s = 0; s < segments; s++) {
+      const angle = baseAngle + (s / segments) * Math.PI * 2;
+      const nextAngle = baseAngle + ((s + 1) / segments) * Math.PI * 2;
+      const radius = 40 + bass * 50 + energy * 30;
+
+      const hue = (baseHue + s * (360 / segments)) % 360;
+      const lum = 12 + energy * 25 + bass * 18;
+      ctx.fillStyle = `hsla(${hue}, 88%, ${Math.min(55, lum)}%, ${0.5 + energy * 0.35})`;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      ctx.lineTo(cx + Math.cos(nextAngle) * radius, cy + Math.sin(nextAngle) * radius);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Inner ring glow
+    const innerR = 8 + bass * 20;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR);
+    grad.addColorStop(0, `hsla(${(baseHue + 180) % 360}, 100%, 80%, ${0.6 + bass * 0.3})`);
+    grad.addColorStop(1, `hsla(${(baseHue + 180) % 360}, 100%, 20%, 0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Treble sparkle overlay
+    if (treble > 0.3) {
+      for (let d = 0; d < 4; d++) {
+        const sx = (Math.sin(time * 5.7 + d * 3.1) * 0.5 + 0.5) * w;
+        const sy = (Math.cos(time * 4.3 + d * 2.7) * 0.5 + 0.5) * h;
+        const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 6);
+        sg.addColorStop(0, `hsla(0, 0%, 100%, ${treble * 0.7})`);
+        sg.addColorStop(1, 'hsla(0, 0%, 100%, 0)');
+        ctx.fillStyle = sg;
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
+  }
+
+  // --- Program 3: WAVE RIBBONS — flowing sine ribbons across panels ---
+  _ledProgram_RadialPulse(ctx, w, h, time, nx, ny, subBass, bass, energy) {
+    const ribbonCount = 5;
+    const baseHue = (time * 10) % 360;
+
+    for (let r = 0; r < ribbonCount; r++) {
+      const hue = (baseHue + r * 55) % 360;
+      const lum = 15 + energy * 28 + bass * 12;
+      const alpha = 0.4 + energy * 0.3;
+
+      ctx.strokeStyle = `hsla(${hue}, 92%, ${Math.min(55, lum)}%, ${alpha})`;
+      ctx.lineWidth = 3 + subBass * 8 + energy * 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+
+      for (let x = 0; x <= w; x += 2) {
+        const t = x / w;
+        const globalT = nx + t * 0.2;
+        const freq1 = 3 + r * 1.5;
+        const freq2 = 2 + r * 0.8;
+        const amp = h * 0.3 * (0.5 + bass * 0.5);
+        const y = h / 2
+          + Math.sin(globalT * freq1 * Math.PI + time * (1.5 + r * 0.3)) * amp * 0.6
+          + Math.sin(globalT * freq2 * Math.PI + time * 0.8 + r * 2) * amp * 0.4
+          + r * (h / (ribbonCount + 2)) - h * 0.3;
+
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Glow at peaks on beat
+    if (bass > 0.45) {
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, `hsla(${baseHue}, 100%, 60%, ${(bass - 0.45) * 0.4})`);
+      grad.addColorStop(0.5, 'hsla(0, 0%, 0%, 0)');
+      grad.addColorStop(1, `hsla(${(baseHue + 180) % 360}, 100%, 60%, ${(bass - 0.45) * 0.4})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  // --- Program 4: DIGITAL RAIN — matrix-style falling columns ---
+  _ledProgram_Pixel(ctx, w, h, time, nx, ny, mid, highMid, treble, energy) {
+    const colCount = 12;
+    const cellW = w / colCount;
+    const baseHue = (time * 6 + nx * 80) % 360;
+
+    for (let c = 0; c < colCount; c++) {
+      // Each column falls at different speed with different phase
+      const speed = 0.3 + (Math.sin(c * 2.7 + nx * 5) * 0.5 + 0.5) * 0.7;
+      const phase = (time * speed + c * 0.37 + ny * 0.5) % 1;
+      const headY = phase * h * 1.8 - h * 0.3;
+      const tailLen = h * 0.5 + mid * h * 0.4;
+
+      // Gradient trail
+      const x = c * cellW;
+      for (let seg = 0; seg < 16; seg++) {
+        const segY = headY - seg * (tailLen / 16);
+        if (segY < -10 || segY > h + 10) continue;
+        const fade = 1 - seg / 16;
+        const hue = (baseHue + seg * 8) % 360;
+        const lum = fade * (15 + energy * 30 + highMid * 15);
+        ctx.fillStyle = `hsla(${hue}, 85%, ${Math.min(55, lum)}%, ${fade * (0.5 + energy * 0.4)})`;
+        ctx.fillRect(x + 1, segY, cellW - 2, tailLen / 16 + 1);
+      }
+
+      // Bright head pixel
+      if (headY > -5 && headY < h + 5) {
+        ctx.fillStyle = `hsla(${baseHue}, 60%, ${60 + energy * 25}%, ${0.7 + treble * 0.3})`;
+        ctx.fillRect(x, headY - 2, cellW, 4);
+      }
+    }
+  }
+
+  // --- Program 5: SPECTRUM ANALYZER — pro EQ with gradient bars and glow ---
+  _ledProgram_WaveForm(ctx, w, h, time, nx, ny, bass, mid, highMid, energy) {
+    const barCount = 12;
+    const barW = w / barCount;
+    const gap = 2;
+    // Distribute frequency bands across bars with smooth interpolation
+    const bands = [bass, bass * 0.9, bass * 0.7, mid * 0.6 + bass * 0.3,
+                   mid, mid * 0.95, highMid * 0.5 + mid * 0.4,
+                   highMid, highMid * 0.9, highMid * 0.6,
+                   highMid * 0.3, highMid * 0.15];
+
+    const baseHue = (time * 6 + nx * 50) % 360;
+
+    for (let b = 0; b < barCount; b++) {
+      const val = bands[b] * 0.75 + energy * 0.25 + Math.sin(time * 2.5 + b * 0.6) * 0.05;
+      const barH = Math.max(2, val * h * 0.9);
+      const x = b * barW + gap / 2;
+      const bw = barW - gap;
+
+      // Gradient from bottom (warm) to top (cool)
+      const hue1 = (baseHue + b * 12) % 360;
+      const hue2 = (hue1 + 60) % 360;
+      const grad = ctx.createLinearGradient(0, h, 0, h - barH);
+      const lum1 = 15 + energy * 20;
+      const lum2 = 25 + energy * 25 + val * 15;
+      grad.addColorStop(0, `hsl(${hue1}, 90%, ${Math.min(50, lum1)}%)`);
+      grad.addColorStop(0.6, `hsl(${(hue1 + hue2) / 2 % 360}, 88%, ${Math.min(55, (lum1 + lum2) / 2)}%)`);
+      grad.addColorStop(1, `hsl(${hue2}, 85%, ${Math.min(60, lum2)}%)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, h - barH, bw, barH);
+
+      // Peak dot (holds briefly then falls)
+      const peakY = h - barH - 3;
+      ctx.fillStyle = `hsla(0, 0%, 95%, ${0.5 + val * 0.4})`;
+      ctx.fillRect(x, peakY, bw, 2);
+
+      // Bar top glow
+      if (val > 0.4) {
+        const glow = ctx.createLinearGradient(0, h - barH - 8, 0, h - barH + 4);
+        glow.addColorStop(0, 'hsla(0, 0%, 100%, 0)');
+        glow.addColorStop(0.5, `hsla(${hue2}, 100%, 70%, ${(val - 0.4) * 0.5})`);
+        glow.addColorStop(1, 'hsla(0, 0%, 100%, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 2, h - barH - 8, bw + 4, 12);
+      }
     }
   }
 
@@ -653,13 +893,13 @@ export class ConcertStage {
         fixture.core.scale.set(coreRadius, dist, coreRadius);
       }
 
-      // Beam color and opacity
+      // Beam color and opacity — capped low to prevent additive washout
       fixture.beamMat.color.copy(lightColor);
-      fixture.beamMat.opacity = normalizedIntensity > 0.01 ? 0.03 + normalizedIntensity * 0.15 : 0;
+      fixture.beamMat.opacity = normalizedIntensity > 0.01 ? 0.02 + normalizedIntensity * 0.08 : 0;
 
       // Core beam - white-tinted version for bright center
       fixture.coreMat.color.lerpColors(lightColor, _white, 0.6);
-      fixture.coreMat.opacity = normalizedIntensity > 0.01 ? 0.015 + normalizedIntensity * 0.08 : 0;
+      fixture.coreMat.opacity = normalizedIntensity > 0.01 ? 0.008 + normalizedIntensity * 0.035 : 0;
 
       // Lens emissive glow
       fixture.lensMat.emissive.copy(lightColor);

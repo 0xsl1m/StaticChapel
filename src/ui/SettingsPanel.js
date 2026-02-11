@@ -9,13 +9,13 @@ export class SettingsPanel {
     this.values = {
       fogDensity: 0.4,
       lightIntensity: 0.7,
-      particleCount: 0.6,
       cameraFov: 70,
       godRays: true,
       candles: true,
       stageFog: true,
       showFps: false,
       showMood: true,
+      forcedMood: null,
     };
 
     this.onChange = null;
@@ -31,7 +31,6 @@ export class SettingsPanel {
     // Sliders
     this._slider('fog-density', (v) => { this.values.fogDensity = v / 100; });
     this._slider('light-intensity', (v) => { this.values.lightIntensity = v / 100; });
-    this._slider('particle-count', (v) => { this.values.particleCount = v / 100; });
     this._slider('camera-fov', (v) => { this.values.cameraFov = v; }, false);
 
     // Toggles
@@ -40,6 +39,15 @@ export class SettingsPanel {
     this._toggle('toggle-stagefog', (v) => { this.values.stageFog = v; });
     this._toggle('toggle-fps', (v) => { this.values.showFps = v; });
     this._toggle('toggle-mood', (v) => { this.values.showMood = v; });
+
+    // Mood override dropdown
+    const moodSelect = document.getElementById('mood-select');
+    if (moodSelect) {
+      moodSelect.addEventListener('change', () => {
+        this.values.forcedMood = moodSelect.value || null;
+        if (this.onChange) this.onChange(this.values);
+      });
+    }
   }
 
   _slider(id, callback, isPercent = true) {

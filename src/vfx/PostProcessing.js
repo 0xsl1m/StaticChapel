@@ -91,21 +91,23 @@ export class PostProcessing {
   update(time, energy = 0, isBeat = false) {
     // --- Beat spike ---
     if (isBeat) {
-      this.beatDecay = 0.35; // immediate spike amount
+      this.beatDecay = 0.06; // very subtle beat bump (was 0.35)
     }
 
     // Decay the beat spike
-    this.beatDecay *= 0.92; // exponential decay ~60fps
+    this.beatDecay *= 0.9; // exponential decay ~60fps
     if (this.beatDecay < 0.001) this.beatDecay = 0;
 
     // --- Compute target exposure ---
-    // Base range: low energy -> 1.3, high energy -> 1.8
-    const energyExposure = 1.3 + energy * 0.5; // 1.3 – 1.8
-    const target = Math.min(2.2, energyExposure + this.beatDecay);
+    // Stay close to base exposure, only gentle variation with energy.
+    // High exposure amplifies EVERY light in the scene equally, which
+    // compounds the overlapping spotlight problem. Keep it very tight.
+    const energyExposure = this.baseExposure + energy * 0.06; // 0.85 – 0.91
+    const target = Math.min(0.95, energyExposure + this.beatDecay);
 
     // Smooth toward target
-    this.currentExposure += (target - this.currentExposure) * 0.08;
-    this.currentExposure = Math.max(1.1, Math.min(2.2, this.currentExposure));
+    this.currentExposure += (target - this.currentExposure) * 0.06;
+    this.currentExposure = Math.max(0.7, Math.min(0.95, this.currentExposure));
 
     this.renderer.toneMappingExposure = this.currentExposure;
 

@@ -50,7 +50,7 @@ export class CandleSystem {
 
       for (let i = 0; i < candlesPerSide; i++) {
         const z = zStart + (i / (candlesPerSide - 1)) * zSpan;
-        const baseIntensity = 0.08;
+        const baseIntensity = 0.03;
 
         // --- Candle body ---
         const body = new THREE.Mesh(bodyGeo, bodyMat);
@@ -82,7 +82,7 @@ export class CandleSystem {
         this.group.add(flame);
 
         // --- Warm point light ---
-        const light = new THREE.PointLight(0xFFBF00, baseIntensity, 5);
+        const light = new THREE.PointLight(0xFFBF00, baseIntensity, 3);
         light.position.set(xPos, yPos + 0.12, z);
         this.group.add(light);
 

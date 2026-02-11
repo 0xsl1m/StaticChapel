@@ -141,9 +141,9 @@ export class GodRays {
     for (let i = 0; i < this.shafts.length; i++) {
       const s = this.shafts[i];
       const breath = 0.6 + 0.4 * Math.sin(time * 0.4 + s.phaseOffset);
-      const audioBoost = 1.0 + midEnergy * 3.0;
+      const audioBoost = 1.0 + midEnergy * 1.0;
       const targetOpacity = s.baseOpacity * breath * audioBoost;
-      s.mesh.material.opacity = Math.min(0.25, Math.max(0.02, targetOpacity));
+      s.mesh.material.opacity = Math.min(0.1, Math.max(0.01, targetOpacity));
     }
   }
 }

@@ -245,7 +245,7 @@ export class PipeOrgan {
     });
 
     const consoleX = this.organX;
-    const consoleZ = this.organZ - 1.8; // in front of pipes, facing congregation
+    const consoleZ = this.organZ - 0.3; // tight against organ back panel, behind LED screens
     const consoleBaseY = this.baseY + 0.3;
 
     // Console housing
@@ -323,72 +323,10 @@ export class PipeOrgan {
   //  DECORATIONS  - gothic tracery accents, gold trim
   // ------------------------------------------------------------------
   createDecorations() {
-    const goldTrimMat = new THREE.MeshStandardMaterial({
-      color: GOLD_COLOR,
-      roughness: 0.3,
-      metalness: 0.9,
-      emissive: GOLD_COLOR,
-      emissiveIntensity: 0.05,
-    });
-
-    // Horizontal gold bars between pipe tiers
-    const barHeights = [
-      this.baseY + 5.2,
-      this.baseY + 9.7,
-      this.baseY + 14.7,
-      this.baseY + 19.2,
-    ];
-
-    barHeights.forEach(bY => {
-      const barGeo = new THREE.BoxGeometry(13, 0.12, 0.15);
-      const bar = new THREE.Mesh(barGeo, goldTrimMat);
-      bar.position.set(this.organX, bY, this.organZ - 0.2);
-      this.group.add(bar);
-    });
-
-    // Vertical gold pilasters between pipe sections
-    const pilasterXs = [-6, -3, 0, 3, 6];
-    pilasterXs.forEach(px => {
-      const pilGeo = new THREE.BoxGeometry(0.12, this.totalHeight - this.baseY - 2, 0.15);
-      const pil = new THREE.Mesh(pilGeo, goldTrimMat);
-      pil.position.set(
-        this.organX + px,
-        this.baseY + (this.totalHeight - this.baseY - 2) / 2 + 1,
-        this.organZ - 0.25
-      );
-      this.group.add(pil);
-    });
-
-    // Gothic arch tracery above the top tier (simplified pointed arches)
-    const archCount = 5;
-    const archSpan = 12 / archCount;
-    for (let a = 0; a < archCount; a++) {
-      const cx = this.organX - 6 + archSpan * (a + 0.5);
-      const archBaseY = this.baseY + this.totalHeight - this.baseY - 3;
-      const archH = 2.5;
-      const archW = archSpan * 0.8;
-
-      // Build a pointed arch from curve points
-      const points = [];
-      const segs = 16;
-      for (let s = 0; s <= segs; s++) {
-        const t = s / segs;
-        const angle = t * Math.PI;
-        const x = cx + (t - 0.5) * archW;
-        // Pointed arch: two arcs meeting at a point
-        const peak = archH;
-        const y = archBaseY + Math.sin(angle) * peak * (1 + 0.3 * Math.sin(angle));
-        points.push(new THREE.Vector3(x, y, this.organZ - 0.35));
-      }
-
-      const archCurve = new THREE.CatmullRomCurve3(points);
-      const archGeo = new THREE.TubeGeometry(archCurve, 16, 0.05, 6, false);
-      const arch = new THREE.Mesh(archGeo, goldTrimMat);
-      this.group.add(arch);
-    }
+    // Gold arches and pilasters REMOVED — were visible behind LED screens
 
     // Small point light inside the organ to cast warm interior glow
-    const organInnerLight = new THREE.PointLight(0x442200, 0.3, 12);
+    const organInnerLight = new THREE.PointLight(0x442200, 0.1, 8);
     organInnerLight.position.set(this.organX, this.baseY + 8, this.organZ - 0.5);
     this.group.add(organInnerLight);
   }
