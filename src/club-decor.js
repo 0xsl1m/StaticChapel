@@ -239,10 +239,10 @@ export class ClubDecor {
     const barH = 1.12;     // standard bar counter height (42-44 inches)
     const barD = 0.9;      // deeper counter
 
-    // ======== BACK BAR WALL — dark cedar paneling against cathedral wall ========
+    // ======== BACK BAR WALL — dark oak paneling against cathedral wall ========
     const backWallH = 4.5;
     const backWallMat = new THREE.MeshStandardMaterial({
-      color: 0x1e0d06, roughness: 0.78, metalness: 0.01,
+      color: 0x0e0804, roughness: 0.82, metalness: 0.01,
     });
     // Sits flush against wall face (z=0 in local space, 0.08m thick)
     bar.add(place(new THREE.Mesh(
@@ -293,7 +293,7 @@ export class ClubDecor {
       const moonZ = alcoveZ + 0.08;
       const moonMat = new THREE.MeshStandardMaterial({
         color: 0xf0e8d0, roughness: 0.3, metalness: 0.6,
-        emissive: 0xf0e8d0, emissiveIntensity: 0.06,
+        emissive: 0xf0e8d0, emissiveIntensity: 0.4,
       });
       const shadowMat = new THREE.MeshStandardMaterial({
         color: 0x0a0a0e, roughness: 0.8, metalness: 0.0,
@@ -303,6 +303,11 @@ export class ClubDecor {
       const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(moonR, 32), moonMat);
       moonDisc.position.set(ax, moonY, moonZ);
       bar.add(moonDisc);
+
+      // Small warm light behind each moon to illuminate it
+      const moonLight = new THREE.PointLight(0xf0e8d0, 0.12, 3, 1.0);
+      moonLight.position.set(ax, moonY, moonZ + 0.15);
+      bar.add(moonLight);
 
       // Shadow overlay — offset and scaled to create each phase
       // Shadow is a slightly larger disc placed in front, shifted left or right.

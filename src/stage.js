@@ -67,6 +67,7 @@ export class ConcertStage {
     if (this.Q.stageFixtureModels !== false) {
       this.createLightFixtures();
     }
+    this.createPARCans();
     if (this.Q.fogMachines !== false) {
       this.createFogMachines();
     }
@@ -508,6 +509,64 @@ export class ConcertStage {
   }
 
   // ==================================================================
+  //  PAR CAN MODELS  (visible fixtures on stage floor matching LightingDirector PARs)
+  // ==================================================================
+  createPARCans() {
+    const parCount = this.Q.parWashes !== undefined ? this.Q.parWashes : 8;
+    if (parCount === 0) return;
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x111111, roughness: 0.4, metalness: 0.6,
+    });
+    const lensMat = new THREE.MeshStandardMaterial({
+      color: 0x222222, roughness: 0.2, metalness: 0.3,
+      emissive: new THREE.Color(0x8B00FF),
+      emissiveIntensity: 0.8,
+    });
+
+    // Match LightingDirector PAR positions: circle of radius 5 around (0, 4.0, 24)
+    // But models sit on stage floor (y=STAGE_Y) aimed upward
+    const parGeo = new THREE.CylinderGeometry(0.12, 0.15, 0.35, 8);
+    const lensGeo = new THREE.CircleGeometry(0.12, 8);
+    const yokeGeo = new THREE.BoxGeometry(0.04, 0.3, 0.04);
+
+    this.parCanMeshes = [];
+
+    for (let i = 0; i < parCount; i++) {
+      const angle = (i / parCount) * Math.PI * 2;
+      const radius = 5;
+      const x = Math.cos(angle) * radius;
+      const z = 24 + Math.sin(angle) * radius;
+
+      const parGroup = new THREE.Group();
+
+      // Yoke / stand (vertical bar)
+      const yoke = new THREE.Mesh(yokeGeo, bodyMat);
+      yoke.position.y = 0.15;
+      parGroup.add(yoke);
+
+      // PAR can body (cylinder, tilted upward ~60 degrees)
+      const canGroup = new THREE.Group();
+      canGroup.position.y = 0.3;
+      canGroup.rotation.x = -Math.PI / 3; // tilt upward
+
+      const body = new THREE.Mesh(parGeo, bodyMat);
+      canGroup.add(body);
+
+      // Lens face (glowing front)
+      const lens = new THREE.Mesh(lensGeo, lensMat.clone());
+      lens.position.y = 0.18;
+      canGroup.add(lens);
+
+      parGroup.add(canGroup);
+      parGroup.position.set(x, STAGE_Y, z);
+      this.group.add(parGroup);
+
+      this.parCanMeshes.push({ lens: lens, canGroup });
+    }
+  }
+
+  // ==================================================================
   //  FOG MACHINES  (4 units on the floor near front of stage)
   // ==================================================================
   createFogMachines() {
@@ -568,6 +627,7 @@ export class ConcertStage {
       this.updateFixtures(time, bandValues, energy);
       this.updateFixtureScreens(time, energy);
     }
+    this.updatePARCans();
   }
 
   // ------------------------------------------------------------------
@@ -767,6 +827,20 @@ export class ConcertStage {
       ctx.fillText(String(dmxVal).padStart(3, '0'), w - 22, 26);
 
       texture.needsUpdate = true;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  //  PAR can lens color sync with LightingDirector
+  // ------------------------------------------------------------------
+  updatePARCans() {
+    if (!this.parCanMeshes || !this.lightingDirector) return;
+    const pars = this.lightingDirector.parWashes;
+    for (let i = 0; i < this.parCanMeshes.length && i < pars.length; i++) {
+      const par = pars[i];
+      const mesh = this.parCanMeshes[i];
+      mesh.lens.material.emissive.copy(par.color);
+      mesh.lens.material.emissiveIntensity = 0.3 + (par.intensity / 2.0) * 2.0;
     }
   }
 

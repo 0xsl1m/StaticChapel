@@ -25,19 +25,21 @@ export class CandleSystem {
   // Build
   // ---------------------------------------------------------------
   _build() {
-    const totalCandles = this.Q.candleCount || 48;
     const useLights = this.Q.candleLights !== false;
-    const candlesPerSide = Math.ceil(totalCandles / 2);
-
-    const zStart = -25;
-    const zEnd = 18;
-    const zSpan = zEnd - zStart;
     const yPos = 3; // wall sconce height (matches cathedral wall sconces)
+
+    // Place candles ONLY at the 7 sconce positions per side (14 total)
+    // Cathedral sconces: naveLength=60, spacing=60/8=7.5, z = -30 + 7.5*(i+1)
+    const naveLength = 60;
+    const sconceSpacing = naveLength / 8;
+    const sconceZPositions = [];
+    for (let i = 0; i < 7; i++) {
+      sconceZPositions.push(-naveLength / 2 + sconceSpacing * (i + 1));
+    }
 
     // Shared geometries
     const bodyGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 6);
     const flameGeo = new THREE.PlaneGeometry(0.08, 0.14);
-    const bracketGeo = new THREE.BoxGeometry(0.06, 0.02, 0.06);
 
     // Shared materials
     const bodyMat = new THREE.MeshStandardMaterial({
@@ -47,30 +49,19 @@ export class CandleSystem {
       emissive: 0xFFF8DC,
       emissiveIntensity: 0.05
     });
-    const bracketMat = new THREE.MeshStandardMaterial({
-      color: 0x2a2a2a,
-      roughness: 0.6,
-      metalness: 0.4
-    });
 
-    for (let side = 0; side < 2; side++) {
-      const xPos = side === 0 ? -9.7 : 9.7; // on inner wall face (matches cathedral wall sconces)
+    for (const side of [-1, 1]) {
+      const xPos = side * 9.7; // inner wall face (matches cathedral sconce x)
 
-      for (let i = 0; i < candlesPerSide; i++) {
-        const z = zStart + (i / (candlesPerSide - 1)) * zSpan;
+      for (const z of sconceZPositions) {
         const baseIntensity = 0.03;
 
-        // --- Candle body ---
+        // Candle body sits in the sconce cup
         const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.set(xPos, yPos, z);
+        body.position.set(xPos + side * 0.8, yPos + 0.06, z);
         this.group.add(body);
 
-        // --- Small bracket / mount ---
-        const bracket = new THREE.Mesh(bracketGeo, bracketMat);
-        bracket.position.set(xPos, yPos - 0.075 - 0.01, z);
-        this.group.add(bracket);
-
-        // --- Flame plane (billboard) ---
+        // Flame plane (billboard)
         const flameMat = new THREE.MeshBasicMaterial({
           color: 0xFFAA00,
           transparent: true,
@@ -80,18 +71,17 @@ export class CandleSystem {
           depthWrite: false
         });
         const flame = new THREE.Mesh(flameGeo, flameMat);
-        flame.position.set(xPos, yPos + 0.075 + 0.06, z);
+        flame.position.set(xPos + side * 0.8, yPos + 0.06 + 0.075 + 0.04, z);
         this.group.add(flame);
 
-        // --- Warm point light (skipped on low tier) ---
+        // Warm point light (skipped on low tier)
         let light = null;
         if (useLights) {
           light = new THREE.PointLight(0xFFBF00, baseIntensity, 3);
-          light.position.set(xPos, yPos + 0.12, z);
+          light.position.set(xPos + side * 0.8, yPos + 0.18, z);
           this.group.add(light);
         }
 
-        // Store reference
         this.candles.push({
           light,
           flame,
