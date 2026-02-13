@@ -104,8 +104,8 @@ const QUALITY_CONFIGS = {
 
     // Stage / LED
     ledPanelCount: 1,                  // center panel only (single screen for Quest 3)
-    ledCanvasRes: 256,                 // 256x256 for decent video quality
-    ledUpdateInterval: 2,              // update every 2nd frame (video needs smooth playback)
+    ledCanvasRes: 512,                 // 512x512 for sharp video (1 panel = safe GPU upload)
+    ledUpdateInterval: 1,              // update every frame for smooth video playback
     fixtureScreens: false,             // no mini-screens on fixture heads
     beamCoreEnabled: false,            // skip inner beam cores
     beamConesEnabled: false,           // skip ALL beam cones (saves 16+ additive-blend draw calls)
