@@ -71,8 +71,6 @@ export class ClubDecor {
 
     this.chandeliers = [];
     this.electricArcs = [];
-    this.pillarGlows = [];
-    this.staticParticles = null;
     this.barGlow = null;
 
     this.build();
@@ -83,9 +81,7 @@ export class ClubDecor {
     this.createChandeliers();
     this.createCocktailBar();
     this.createFurniture();
-    this.createPillarGlows();
     this.createElectricArcs();
-    this.createStaticParticles();
   }
 
   // ==================================================================
@@ -242,49 +238,61 @@ export class ClubDecor {
     // ======== BACK BAR WALL — very dark oak paneling with grain texture ========
     const backWallH = 4.5;
     const backWallMat = (() => {
-      // Procedural dark oak grain texture
+      // Procedural dark walnut grain texture — rich warm brown, not grey
       const res = 256;
       const c = document.createElement('canvas');
       c.width = res; c.height = res;
       const ctx = c.getContext('2d');
-      // Very dark oak base
-      ctx.fillStyle = '#0a0604';
+      // Dark walnut base — warm brown, not near-black
+      ctx.fillStyle = '#1e0f08';
       ctx.fillRect(0, 0, res, res);
-      // Horizontal grain lines
+      // Horizontal grain lines with strong color variation
       for (let y = 0; y < res; y++) {
-        const grain = Math.sin(y * 0.25) * 0.3 +
-                      Math.sin(y * 0.6 + 1.5) * 0.2 +
-                      Math.sin(y * 1.3 + 3.0) * 0.1;
+        const grain = Math.sin(y * 0.2) * 0.35 +
+                      Math.sin(y * 0.55 + 1.5) * 0.25 +
+                      Math.sin(y * 1.1 + 3.0) * 0.15 +
+                      Math.sin(y * 2.7 + 0.8) * 0.08;
         const v = grain * 0.5 + 0.5;
-        const r = Math.max(0, 10 + v * 8);
-        const g = Math.max(0, 6 + v * 5);
-        const b = Math.max(0, 4 + v * 3);
-        ctx.fillStyle = `rgba(${r},${g},${b},0.5)`;
+        // Warm brown channel ratios: r > g >> b
+        const r = Math.floor(35 + v * 30);
+        const g = Math.floor(18 + v * 16);
+        const b = Math.floor(8 + v * 8);
+        ctx.fillStyle = `rgba(${r},${g},${b},0.6)`;
         ctx.fillRect(0, y, res, 1);
       }
-      // Knots
+      // Darker grain streaks
+      for (let s = 0; s < 8; s++) {
+        const sy = ((s * 31 + 11) % res);
+        ctx.fillStyle = 'rgba(12,5,2,0.4)';
+        ctx.fillRect(0, sy, res, 2);
+      }
+      // Knots — darker brown, not black
       for (let k = 0; k < 4; k++) {
         const kx = ((k * 67 + 13) % res);
         const ky = ((k * 89 + 37) % res);
-        ctx.fillStyle = 'rgba(4,2,1,0.5)';
+        ctx.fillStyle = 'rgba(10,4,2,0.6)';
         ctx.beginPath();
-        ctx.ellipse(kx, ky, 12, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(kx, ky, 14, 7, 0, 0, Math.PI * 2);
         ctx.fill();
+        // Lighter ring around knot
+        ctx.strokeStyle = 'rgba(50,25,12,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
       // Fine noise
       const id = ctx.getImageData(0, 0, res, res);
       for (let i = 0; i < id.data.length; i += 4) {
-        const n = (Math.random() - 0.5) * 6;
+        const n = (Math.random() - 0.5) * 8;
         id.data[i] = Math.max(0, Math.min(255, id.data[i] + n));
-        id.data[i + 1] = Math.max(0, Math.min(255, id.data[i + 1] + n));
-        id.data[i + 2] = Math.max(0, Math.min(255, id.data[i + 2] + n));
+        id.data[i + 1] = Math.max(0, Math.min(255, id.data[i + 1] + n * 0.6));
+        id.data[i + 2] = Math.max(0, Math.min(255, id.data[i + 2] + n * 0.3));
       }
       ctx.putImageData(id, 0, 0);
       const tex = new THREE.CanvasTexture(c);
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       tex.repeat.set(3, 2);
       return new THREE.MeshStandardMaterial({
-        map: tex, color: 0xffffff, roughness: 0.85, metalness: 0.01,
+        map: tex, color: 0x3a1e0e, roughness: 0.72, metalness: 0.02,
       });
     })();
     // Sits flush against wall face (z=0 in local space, 0.08m thick)
@@ -609,19 +617,20 @@ export class ClubDecor {
     };
 
     // ======== NAVE CENTER — Fill the space between column rows (x=±10) ========
-    // Push groups closer to columns: x=±6 with 6m wide pieces → edges at x=±3 to ±9
+    // Pieces sized to fit within ~4.6m bay spacing without clipping neighbors
+    // x=±5.5 pushes groups toward columns, leaving clear center aisle
 
     // --- Bay 0-1 (z ≈ -23): Near-bar — L-sectionals flanking center path ---
     const bay01z = (colZ(0) + colZ(1)) / 2;
-    this._placeSectionalGroup(-5.5, bay01z, faceStage(-5.5, bay01z), 'velvetNavy', 'L', 6.0, M);
-    this._placeSectionalGroup(5.5, bay01z, faceStage(5.5, bay01z), 'velvetEmerald', 'L', 6.0, M);
+    this._placeSectionalGroup(-5.5, bay01z, faceStage(-5.5, bay01z), 'velvetNavy', 'L', 4.0, M);
+    this._placeSectionalGroup(5.5, bay01z, faceStage(5.5, bay01z), 'velvetEmerald', 'L', 4.0, M);
 
     // --- Bay 1-2 (z ≈ -18.5): Deep lounge — two U-sectionals side by side ---
     const bay12z = (colZ(1) + colZ(2)) / 2;
-    this._placeSectionalGroup(-5.0, bay12z, faceStage(-5.0, bay12z), 'velvetCrimson', 'U', 6.0, M);
-    this._placeSectionalGroup( 5.0, bay12z, faceStage(5.0, bay12z), 'velvetPlum', 'U', 6.0, M);
+    this._placeSectionalGroup(-5.5, bay12z, faceStage(-5.5, bay12z), 'velvetCrimson', 'U', 4.0, M);
+    this._placeSectionalGroup( 5.5, bay12z, faceStage(5.5, bay12z), 'velvetPlum', 'U', 4.0, M);
 
-    // --- Bay 2-3 (z ≈ -13.8): Mid lounge — facing sofas pushed wide ---
+    // --- Bay 2-3 (z ≈ -13.8): Mid lounge — facing sofas ---
     const bay23z = (colZ(2) + colZ(3)) / 2;
     this._placeFacingSofas(-5.5, bay23z, 'velvetEmerald', M);
     this._placeFacingSofas( 5.5, bay23z, 'velvetPlum', M);
@@ -683,7 +692,7 @@ export class ClubDecor {
       // L-shaped sectional: long section + short return
       const longW = size;
       const shortW = size * 0.6;
-      const depth = 1.1;
+      const depth = 1.0;
       const h = 0.85;
       // Long section (along X)
       g.add(this._buildSofa(longW, depth, h, upholstery, M));
@@ -693,18 +702,18 @@ export class ClubDecor {
       returnSofa.position.set(longW / 2 - depth / 2, 0, -shortW / 2 + depth / 2);
       g.add(returnSofa);
       // Coffee table in the L's inner corner
-      const ct = this._buildCoffeeTable(1.4, 0.7, M);
-      ct.position.set(longW / 2 - 1.2, 0, -1.0);
+      const ct = this._buildCoffeeTable(1.2, 0.6, M);
+      ct.position.set(longW / 4, 0, -0.8);
       g.add(ct);
       // End table at far end
       const et = this._buildEndTable(M);
-      et.position.set(-longW / 2 - 0.4, 0, 0);
+      et.position.set(-longW / 2 - 0.3, 0, 0);
       g.add(et);
     } else if (shape === 'U') {
       // U-shaped: center back + two side returns, opening toward stage (+z)
       const centerW = size;
       const returnW = size * 0.4;
-      const depth = 1.1;
+      const depth = 1.0;
       const h = 0.85;
       // Center back section (sofa faces +z toward stage, back at -z)
       const centerSofa = this._buildSofa(centerW, depth, h, upholstery, M);
@@ -720,9 +729,9 @@ export class ClubDecor {
       rightReturn.rotation.y = Math.PI / 2;
       rightReturn.position.set(centerW / 2 - depth / 2, 0, returnW / 2 - depth / 2);
       g.add(rightReturn);
-      // Large coffee table in the center of the U
-      const ct = this._buildCoffeeTable(2.2, 1.0, M);
-      ct.position.set(0, 0, 0.8);
+      // Coffee table in the center of the U
+      const ct = this._buildCoffeeTable(1.6, 0.8, M);
+      ct.position.set(0, 0, 0.6);
       g.add(ct);
     }
 
@@ -735,31 +744,32 @@ export class ClubDecor {
   _placeFacingSofas(x, z, colorName, M) {
     const g = new THREE.Group();
     const upholstery = M[colorName] || M.velvetEmerald;
-    const sofaW = 3.5;
-    const gap = 2.2; // space between facing sofas
+    const sofaW = 3.0;
+    const sofaD = 0.9;
+    const gap = 1.6; // space between facing sofas (total Z: gap + 2*sofaD ≈ 3.4m)
 
     // Sofa 1 (faces toward stage, sits on -z side)
-    const s1 = this._buildSofa(sofaW, 1.0, 0.85, upholstery, M);
-    s1.position.set(0, 0, gap / 2);
+    const s1 = this._buildSofa(sofaW, sofaD, 0.85, upholstery, M);
+    s1.position.set(0, 0, gap / 2 + sofaD / 2);
     g.add(s1);
 
     // Sofa 2 (faces away from stage, sits on +z side)
-    const s2 = this._buildSofa(sofaW, 1.0, 0.85, upholstery, M);
+    const s2 = this._buildSofa(sofaW, sofaD, 0.85, upholstery, M);
     s2.rotation.y = Math.PI;
-    s2.position.set(0, 0, -gap / 2);
+    s2.position.set(0, 0, -(gap / 2 + sofaD / 2));
     g.add(s2);
 
     // Coffee table between them
-    const ct = this._buildCoffeeTable(1.6, 0.8, M);
+    const ct = this._buildCoffeeTable(1.4, 0.7, M);
     ct.position.set(0, 0, 0);
     g.add(ct);
 
     // End tables at each end of the arrangement
     const et1 = this._buildEndTable(M);
-    et1.position.set(sofaW / 2 + 0.4, 0, 0);
+    et1.position.set(sofaW / 2 + 0.3, 0, 0);
     g.add(et1);
     const et2 = this._buildEndTable(M);
-    et2.position.set(-sofaW / 2 - 0.4, 0, 0);
+    et2.position.set(-sofaW / 2 - 0.3, 0, 0);
     g.add(et2);
 
     g.position.set(x, 0, z);
@@ -775,12 +785,12 @@ export class ClubDecor {
     const ct = this._buildCoffeeTable(1.2, 0.6, M);
     g.add(ct);
 
-    // 4 chairs in a loose arc facing the table
+    // 4 chairs in a tighter arc facing the table
     const chairs = [
-      { px: -1.5, pz:  0.8, ry: -0.4 },
-      { px:  1.5, pz:  0.8, ry:  0.4 },
-      { px: -1.3, pz: -1.0, ry: -0.2 + Math.PI },
-      { px:  1.3, pz: -1.0, ry:  0.2 + Math.PI },
+      { px: -1.1, pz:  0.7, ry: -0.4 },
+      { px:  1.1, pz:  0.7, ry:  0.4 },
+      { px: -1.0, pz: -0.7, ry: -0.2 + Math.PI },
+      { px:  1.0, pz: -0.7, ry:  0.2 + Math.PI },
     ];
     chairs.forEach(c => {
       const ch = this._buildLoungeChair(upholstery, M);
@@ -791,10 +801,10 @@ export class ClubDecor {
 
     // End tables between chair pairs
     const et1 = this._buildEndTable(M);
-    et1.position.set(-2.2, 0, 0);
+    et1.position.set(-1.7, 0, 0);
     g.add(et1);
     const et2 = this._buildEndTable(M);
-    et2.position.set(2.2, 0, 0);
+    et2.position.set(1.7, 0, 0);
     g.add(et2);
 
     g.position.set(x, 0, z);
@@ -999,146 +1009,6 @@ export class ClubDecor {
     return table;
   }
 
-  // ==================================================================
-  //  PILLAR GLOW CYLINDERS
-  // ==================================================================
-  createPillarGlows() {
-    const spacing = NAVE_LENGTH / 13;
-    const pillarH = 28;
-    // High res for noise-based tendril patterns
-    const glowGeo = new THREE.CylinderGeometry(0.68, 0.68, pillarH, 16, 48, true);
-
-    // Arc strikes at y=20 → normalized = 8/28 ≈ 0.286 (0=top, 1=bottom)
-    const STRIKE_NORM = 8.0 / 28.0;
-
-    // Realistic electricity shader: instant illumination with crackling tendrils,
-    // NOT a sweeping wavefront. Real electricity through a conductor is near-instant.
-    const makeGlowMat = () => new THREE.ShaderMaterial({
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      uniforms: {
-        uIntensity:   { value: 0.0 },   // overall brightness (0=off, 1=full)
-        uStrikePoint: { value: STRIKE_NORM },
-        uTime:        { value: 0.0 },
-        uColor:       { value: new THREE.Color(0x5577ff) },
-        uFlicker:     { value: 0.0 },    // rapid random flicker seed (changes per frame)
-      },
-      vertexShader: `
-        varying float vH;  // 0=top, 1=bottom
-        varying float vA;  // angle around pillar (0..1)
-        varying vec3 vPos;
-        void main() {
-          vH = 1.0 - uv.y;
-          vA = uv.x;
-          vPos = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uIntensity;
-        uniform float uStrikePoint;
-        uniform float uTime;
-        uniform vec3 uColor;
-        uniform float uFlicker;
-        varying float vH;
-        varying float vA;
-        varying vec3 vPos;
-
-        // 2D hash for tendril patterns
-        float hash21(vec2 p) {
-          p = fract(p * vec2(123.34, 456.21));
-          p += dot(p, p + 45.32);
-          return fract(p.x * p.y);
-        }
-        // Value noise 2D
-        float noise2D(vec2 p) {
-          vec2 i = floor(p);
-          vec2 f = fract(p);
-          f = f * f * (3.0 - 2.0 * f);
-          float a = hash21(i);
-          float b = hash21(i + vec2(1.0, 0.0));
-          float c = hash21(i + vec2(0.0, 1.0));
-          float d = hash21(i + vec2(1.0, 1.0));
-          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-        }
-        // Fractal noise (2 octaves for speed)
-        float fbm(vec2 p) {
-          float v = 0.0;
-          v += noise2D(p) * 0.6;
-          v += noise2D(p * 2.3 + 1.7) * 0.4;
-          return v;
-        }
-
-        void main() {
-          if (uIntensity <= 0.001) discard;
-
-          // Distance from strike point (normalized). Electricity is brightest
-          // at strike and fades toward extremities.
-          float distFromStrike = abs(vH - uStrikePoint);
-          // Below strike: electricity grounds (brighter, further reach)
-          // Above strike: brief upward glow (dimmer, limited)
-          float isBelow = step(uStrikePoint, vH);
-          float reach = isBelow
-            ? smoothstep(1.0, uStrikePoint, vH) // ground reach: full pillar below strike
-            : smoothstep(0.15, 0.0, distFromStrike); // upward: only ~15% of pillar height
-
-          // === BRANCHING TENDRILS ===
-          // Noise pattern that looks like forking electrical discharges
-          // scrolls with time and flickers randomly per frame
-          vec2 tendrilUV = vec2(vA * 6.0, vH * 12.0); // tile around and along pillar
-          float tendril = fbm(tendrilUV + vec2(uFlicker * 3.0, uTime * 8.0));
-          // Threshold to create distinct bright channels
-          float channels = smoothstep(0.35, 0.65, tendril);
-          // Add finer branches
-          float fine = fbm(tendrilUV * 3.0 + vec2(uFlicker * 7.0, -uTime * 15.0));
-          float fineBranch = smoothstep(0.45, 0.7, fine) * 0.5;
-          float pattern = channels + fineBranch;
-
-          // === CORE BRIGHTNESS at strike point ===
-          float strikeGlow = exp(-distFromStrike * distFromStrike * 80.0);
-
-          // === GROUND FLASH (base of pillar) ===
-          float groundGlow = exp(-(1.0 - vH) * (1.0 - vH) * 60.0) * isBelow;
-
-          // === COMBINE ===
-          // Random per-frame crackle (simulates rapid discharge fluctuation)
-          float crackle = 0.5 + 0.5 * hash21(vec2(uFlicker, vH * 10.0 + vA * 5.0));
-
-          float brightness = (
-            pattern * reach * crackle * 0.6     // tendril network
-            + strikeGlow * 0.8                   // hot spot at strike
-            + groundGlow * 0.3                   // ground termination
-            + reach * 0.1                        // base ambient along path
-          ) * uIntensity;
-
-          if (brightness < 0.005) discard;
-
-          // Color: white-hot at high brightness, blue-purple at edges
-          vec3 hotWhite = vec3(0.92, 0.95, 1.0);
-          vec3 col = mix(uColor, hotWhite, smoothstep(0.15, 0.6, brightness));
-
-          gl_FragColor = vec4(col, min(brightness, 0.65));
-        }
-      `,
-    });
-
-    for (let i = 0; i < 12; i++) {
-      const z = -NAVE_LENGTH / 2 + spacing * (i + 1);
-      const leftGlow = new THREE.Mesh(glowGeo, makeGlowMat());
-      leftGlow.position.set(-NAVE_WIDTH / 2, pillarH / 2, z);
-      this.group.add(leftGlow);
-      const rightGlow = new THREE.Mesh(glowGeo, makeGlowMat());
-      rightGlow.position.set(NAVE_WIDTH / 2, pillarH / 2, z);
-      this.group.add(rightGlow);
-      this.pillarGlows.push({
-        left: leftGlow, right: rightGlow,
-        leftIntensity: 0, rightIntensity: 0,
-        index: i,
-      });
-    }
-  }
 
   // ==================================================================
   //  ELECTRIC ARCS
@@ -1208,50 +1078,14 @@ export class ClubDecor {
   }
 
   // ==================================================================
-  //  STATIC PARTICLES
-  // ==================================================================
-  createStaticParticles() {
-    const count = this.Q.staticParticles !== undefined ? this.Q.staticParticles : 200;
-    if (count <= 0) return;
-    const positions = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const isNearColumn = Math.random() > 0.35;
-      if (isNearColumn) {
-        const side = Math.random() > 0.5 ? 1 : -1;
-        positions[i * 3] = side * (NAVE_WIDTH / 2) + (Math.random() - 0.5) * 2;
-        positions[i * 3 + 1] = 10 + Math.random() * 18;
-        positions[i * 3 + 2] = (Math.random() - 0.5) * NAVE_LENGTH;
-      } else {
-        positions[i * 3] = (Math.random() - 0.5) * NAVE_WIDTH * 0.7;
-        positions[i * 3 + 1] = 18 + Math.random() * 10;
-        positions[i * 3 + 2] = (Math.random() - 0.5) * NAVE_LENGTH;
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const mat = new THREE.PointsMaterial({
-      color: 0xccddff, size: 0.06, transparent: true, opacity: 0,
-      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-    });
-    this.staticParticles = new THREE.Points(geo, mat);
-    this.group.add(this.staticParticles);
-  }
-
-  // ==================================================================
   //  UPDATE — Audio-reactive animations
   // ==================================================================
   update(time, bandValues, energy, isBeat) {
     if (!bandValues) bandValues = {};
     if (energy === undefined) energy = 0;
 
-    // Delta time for frame-independent animation
-    const dt = time - (this._lastTime || time);
-    this._lastTime = time;
-
     this._updateChandeliers(time, energy, isBeat);
     this._updateArcs(time, energy, isBeat, bandValues);
-    this._updatePillarGlows(dt, time);
-    this._updateParticles(time, energy, isBeat);
     this._updateBarGlow(time, energy);
   }
 
@@ -1279,30 +1113,6 @@ export class ClubDecor {
     });
   }
 
-  _updatePillarGlows(dt, time) {
-    // Electricity on a conductor is near-instant. No sweep — just intensity + decay.
-    // Fast decay: glow fades in ~120ms after arc stops feeding it.
-    const DECAY_RATE = 8.0; // per-sec
-    const safeDt = Math.min(dt, 0.05);
-
-    this.pillarGlows.forEach(pg => {
-      // Decay intensity when not being actively fed by an arc
-      pg.leftIntensity = Math.max(0, pg.leftIntensity - DECAY_RATE * safeDt);
-      pg.rightIntensity = Math.max(0, pg.rightIntensity - DECAY_RATE * safeDt);
-
-      // Push uniforms
-      const lu = pg.left.material.uniforms;
-      lu.uIntensity.value = pg.leftIntensity;
-      lu.uTime.value = time;
-      lu.uFlicker.value = Math.random(); // new random seed every frame for crackle
-
-      const ru = pg.right.material.uniforms;
-      ru.uIntensity.value = pg.rightIntensity;
-      ru.uTime.value = time;
-      ru.uFlicker.value = Math.random();
-    });
-  }
-
   _updateArcs(time, energy, isBeat, bandValues) {
     const dt = 0.016;
     // Bass-driven: combine subBass and bass for a single "bassLevel" 0-1+
@@ -1314,11 +1124,6 @@ export class ClubDecor {
     const bassActive = bassLevel > BASS_THRESHOLD;
     // Quadratic intensity — light bass = barely visible, heavy bass = blazing
     const bassIntensity = bassLevel * bassLevel;
-
-    // Bass-reactive color: deeper bass → purple-violet, lighter → blue-white
-    const bassColorR = 0.4 + (1.0 - bassLevel) * 0.2;
-    const bassColorG = 0.5 + (1.0 - bassLevel) * 0.3;
-    const bassColorB = 1.0;
 
     this.electricArcs.forEach(arc => {
       arc.cooldown = Math.max(0, arc.cooldown - dt);
@@ -1375,22 +1180,6 @@ export class ClubDecor {
           arc.mainMat.opacity = Math.min(1.0, flicker * bassMult);
           arc.branchMat.opacity = Math.min(1.0, flicker * bassMult * 0.6);
           arc.branch2Mat.opacity = Math.min(1.0, flicker * bassMult * 0.35);
-
-          // Feed pillar glow — instant illumination while arc is active
-          const pg = this.pillarGlows[arc.pillarIndex];
-          if (pg && flicker > 0) {
-            const si = Math.min(1.0, bassIntensity * 1.8 + 0.15);
-            // Left pillar: immediate
-            pg.leftIntensity = Math.max(pg.leftIntensity, si);
-            // Right pillar: slight delay
-            if (!pg._rightDelay || pg._rightDelay <= 0) {
-              pg._rightDelay = 0.005 + Math.random() * 0.01;
-            }
-            pg._rightPendingIntensity = si;
-            // Bass-reactive color
-            pg.left.material.uniforms.uColor.value.setRGB(bassColorR, bassColorG, bassColorB);
-            pg.right.material.uniforms.uColor.value.setRGB(bassColorR, bassColorG, bassColorB);
-          }
         }
       } else if (arc.cooldown <= 0) {
         // Re-strike continuation or fresh bass-driven strike
@@ -1412,47 +1201,9 @@ export class ClubDecor {
           arc.branchLine.geometry = this._createLightningGeo(arc.midPoint, arc.branchEnd, 10, 0.4);
           arc.branch2Line.geometry.dispose();
           arc.branch2Line.geometry = this._createLightningGeo(arc.midPoint2, arc.branchEnd2, 8, 0.3);
-
-          // Trigger pillar glow — instant illumination
-          const pg = this.pillarGlows[arc.pillarIndex];
-          if (pg) {
-            const si = Math.min(1.0, 0.3 + bassIntensity * 1.2);
-            pg.leftIntensity = Math.max(pg.leftIntensity, si);
-            // Right pillar: slight propagation delay
-            pg._rightDelay = 0.005 + Math.random() * 0.01;
-            pg._rightPendingIntensity = si;
-          }
-        }
-      }
-
-      // Handle right-pillar propagation delay
-      const pg = this.pillarGlows[arc.pillarIndex];
-      if (pg && pg._rightDelay > 0) {
-        pg._rightDelay -= dt;
-        if (pg._rightDelay <= 0) {
-          const si = pg._rightPendingIntensity || 0.5;
-          pg.rightIntensity = Math.max(pg.rightIntensity, si);
-          pg._rightDelay = 0;
         }
       }
     });
-  }
-
-  _updateParticles(time, energy, isBeat) {
-    if (!this.staticParticles) return;
-    this.staticParticles.material.opacity = Math.min(0.45, energy * 0.4 + (isBeat ? 0.15 : 0));
-    this.staticParticles.material.size = 0.05 + energy * 0.04 + (isBeat ? 0.03 : 0);
-    const positions = this.staticParticles.geometry.attributes.position;
-    const drift = energy * 0.015 + (isBeat ? 0.02 : 0);
-    for (let i = 0; i < positions.count; i++) {
-      positions.array[i * 3] += (Math.random() - 0.5) * drift;
-      positions.array[i * 3 + 1] += (Math.random() - 0.5) * drift * 0.5;
-      positions.array[i * 3 + 2] += (Math.random() - 0.5) * drift;
-      if (Math.abs(positions.array[i * 3]) > NAVE_WIDTH / 2 + 1) positions.array[i * 3] = (Math.random() - 0.5) * NAVE_WIDTH;
-      if (positions.array[i * 3 + 1] < 10 || positions.array[i * 3 + 1] > 29) positions.array[i * 3 + 1] = 13 + Math.random() * 14;
-      if (Math.abs(positions.array[i * 3 + 2]) > NAVE_LENGTH / 2) positions.array[i * 3 + 2] = (Math.random() - 0.5) * NAVE_LENGTH;
-    }
-    positions.needsUpdate = true;
   }
 
   _updateBarGlow(time, energy) {
@@ -1469,7 +1220,6 @@ export class ClubDecor {
       arc.branchLine.geometry.dispose(); arc.branchMat.dispose();
       arc.branch2Line.geometry.dispose(); arc.branch2Mat.dispose();
     });
-    if (this.staticParticles) { this.staticParticles.geometry.dispose(); this.staticParticles.material.dispose(); }
     this.group.traverse(child => {
       if (child.geometry) child.geometry.dispose();
       if (child.material) {
