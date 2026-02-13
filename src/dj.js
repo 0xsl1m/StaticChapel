@@ -165,11 +165,11 @@ export class DJBooth {
       0, leftFrac
     );
 
-    // Front panel — faces -Z (toward audience)
+    // Front panel — faces -Z (toward audience); PlaneGeometry default is +Z, so rotate PI
     createLEDPanel(
       frontW, panelH,
       0, panelY, BOOTH_CENTER_Z - BOOTH_D / 2 - 0.01,
-      0,
+      Math.PI,
       leftFrac, frontFrac
     );
 
