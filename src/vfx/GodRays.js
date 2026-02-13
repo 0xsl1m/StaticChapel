@@ -6,8 +6,10 @@
  * volume built in world space — the gothic window outline at the wall connects
  * to a wider projection on the floor via side-face quads only (no caps).
  *
- * Without caps the shaft reads as a translucent volume of colored light
- * rather than a solid shape. Additive blending makes overlapping faces glow.
+ * Sun cycle: The sun slowly moves across the sky over ~5 minutes. Only one
+ * side of the cathedral is lit at a time — left wall windows when the sun is
+ * on the right (east), right wall windows when the sun is on the left (west).
+ * Brief dimming during overhead transit.
  */
 import * as THREE from 'three';
 
@@ -145,20 +147,50 @@ export class GodRays {
         this.shafts.push({
           mesh,
           baseOpacity,
+          side, // -1 = left wall, +1 = right wall
           phaseOffset: Math.random() * Math.PI * 2
         });
       }
     }
   }
 
+  /**
+   * @param {number} time - elapsed seconds
+   * @param {number} energy - audio energy 0-1
+   * @returns {number} sunSide — current sun side for cathedral window lights to use
+   *   -1 = sun on right (light enters left windows), +1 = sun on left (light enters right windows)
+   */
   update(time, energy = 0) {
+    // Sun cycle: full cycle every ~5 minutes (300s)
+    // sin goes -1 → +1: negative = sun on right (left windows lit), positive = sun on left (right windows lit)
+    const sunCycle = Math.sin(time * (Math.PI * 2 / 300));
+
+    // sunSide: which wall's windows are lit
+    // sunCycle < 0 → sun is east/right → light enters LEFT windows (side=-1)
+    // sunCycle > 0 → sun is west/left → light enters RIGHT windows (side=+1)
+    this.sunSide = sunCycle < 0 ? -1 : 1;
+
+    // How strongly the sun is on one side (0 = overhead, 1 = fully to one side)
+    // Use abs(sunCycle) but with a smooth ramp so the transition isn't instant
+    const sunStrength = Math.min(1.0, Math.abs(sunCycle) * 3.0); // reaches full at ~0.33
+
     for (let i = 0; i < this.shafts.length; i++) {
       const s = this.shafts[i];
       const breath = 0.6 + 0.4 * Math.sin(time * 0.4 + s.phaseOffset);
-      // Dim with music energy — louder music → dimmer god rays (stage lights dominate)
-      const audioDim = 1.0 - energy * 0.6; // at full energy, dims to 40% of base
-      const targetOpacity = s.baseOpacity * breath * audioDim;
-      s.mesh.material.opacity = Math.min(0.22, Math.max(0.03, targetOpacity));
+      const audioDim = 1.0 - energy * 0.6;
+
+      // Sun side factor: 1.0 if this shaft's side matches the lit side, fades to 0 otherwise
+      let sunFactor;
+      if (s.side === this.sunSide) {
+        sunFactor = sunStrength;  // lit side: ramps up as sun moves further to that side
+      } else {
+        sunFactor = 1.0 - sunStrength; // opposite side: fades out
+      }
+
+      const targetOpacity = s.baseOpacity * breath * audioDim * sunFactor;
+      s.mesh.material.opacity = Math.min(0.22, Math.max(0.0, targetOpacity));
     }
+
+    return this.sunSide;
   }
 }

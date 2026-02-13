@@ -1230,16 +1230,37 @@ export class Cathedral {
   /**
    * Update animated elements
    */
-  update(time, energy = 0) {
+  update(time, energy = 0, sunSide = -1) {
     // Subtle stained glass color cycling + dim with music energy
-    const audioDim = 1.0 - energy * 0.5; // at full energy, dims to 50%
+    // sunSide: -1 = sun on right (left windows lit), +1 = sun on left (right windows lit)
+    const audioDim = 1.0 - energy * 0.5;
+    const sunCycle = Math.sin(time * (Math.PI * 2 / 300));
+    const sunStrength = Math.min(1.0, Math.abs(sunCycle) * 3.0);
+
     for (const win of this.windows) {
       const shift = Math.sin(time * 0.3 + win.z * 0.1) * 0.1;
-      const intensity = (0.28 + shift * 0.3) * audioDim;
+
+      // Sun-facing factor for this window's PointLight
+      let sunFactor;
+      if (win.side === sunSide) {
+        sunFactor = sunStrength;
+      } else {
+        sunFactor = 1.0 - sunStrength;
+      }
+
+      // Glass panels always have base opacity (stained glass is visible from ambient light)
+      // but brightened on the sun side
+      const baseGlass = 0.18 + shift * 0.2;
+      const sunBoost = 0.12 * sunFactor;
+      const intensity = (baseGlass + sunBoost) * audioDim;
       for (const panel of win.panels) {
         panel.material.opacity = intensity;
       }
-      if (win.light) win.light.intensity = (0.06 + shift * 0.015) * audioDim;
+
+      // PointLight only active on sun-facing side
+      if (win.light) {
+        win.light.intensity = (0.06 + shift * 0.015) * audioDim * sunFactor;
+      }
     }
 
     // Rose window slow rotation

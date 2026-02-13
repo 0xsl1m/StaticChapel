@@ -305,8 +305,9 @@ function animate() {
   const isBeat = audioEngine.isBeat;
   const mood = audioEngine.getMood();
 
-  // Update cathedral animations (stained glass)
-  cathedral.update(elapsedTime, energy);
+  // Update cathedral animations (stained glass) — pass sunSide so only sun-facing windows glow
+  const sunSide = godRays ? godRays.sunSide || -1 : -1;
+  cathedral.update(elapsedTime, energy, sunSide);
 
   // Update pipe organ (audio-reactive glow) — throttled on low/medium
   if (frameCount % Q.organUpdateEvery === 0) {
