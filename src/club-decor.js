@@ -599,7 +599,7 @@ export class ClubDecor {
     if (energy === undefined) energy = 0;
 
     this._updateChandeliers(time, energy, isBeat);
-    this._updateArcs(time, energy, isBeat);
+    this._updateArcs(time, energy, isBeat, bandValues);
     this._updatePillarGlows();
     this._updateParticles(time, energy, isBeat);
     this._updateBarGlow(time, energy);
@@ -641,8 +641,16 @@ export class ClubDecor {
     });
   }
 
-  _updateArcs(time, energy, isBeat) {
+  _updateArcs(time, energy, isBeat, bandValues) {
     const dt = 0.016;
+    // Bass-driven: combine subBass and bass for a single "bassLevel" 0-1+
+    const subBass = bandValues.subBass || 0;
+    const bass = bandValues.bass || 0;
+    const bassLevel = Math.max(subBass, bass) * 0.6 + (subBass + bass) * 0.2;
+    // Only fire arcs when bass is above a meaningful threshold
+    const BASS_THRESHOLD = 0.08;
+    const bassActive = bassLevel > BASS_THRESHOLD;
+
     this.electricArcs.forEach(arc => {
       arc.cooldown = Math.max(0, arc.cooldown - dt);
       if (arc.isOn) {
@@ -650,22 +658,27 @@ export class ClubDecor {
         if (arc.duration <= 0) {
           // Check for re-strike (real lightning has 2-5 return strokes)
           arc.strikeCount = (arc.strikeCount || 1) - 1;
-          if (arc.strikeCount > 0) {
+          if (arc.strikeCount > 0 && bassActive) {
             // Brief gap between re-strikes (30-60ms dark gap)
             arc.mainMat.opacity = 0;
             arc.branchMat.opacity = 0;
             arc.branch2Mat.opacity = 0;
-            arc.duration = 0.016 + Math.random() * 0.032; // next stroke
-            arc.cooldown = 0.03 + Math.random() * 0.03;   // inter-stroke gap
+            arc.duration = 0.016 + Math.random() * 0.032;
+            arc.cooldown = 0.03 + Math.random() * 0.03;
             arc.isOn = false;
             arc._restrike = true;
           } else {
+            // End of discharge — cooldown scales inversely with bass
             arc.isOn = false;
             arc._restrike = false;
             arc.mainMat.opacity = 0;
             arc.branchMat.opacity = 0;
             arc.branch2Mat.opacity = 0;
-            arc.cooldown = 0.08 + Math.random() * 0.25;
+            // Heavy bass = shorter cooldown (more frequent), low bass = long silence
+            const bassCooldown = bassActive
+              ? 0.12 + Math.random() * 0.2 - bassLevel * 0.1
+              : 0.5 + Math.random() * 1.0;
+            arc.cooldown = Math.max(0.06, bassCooldown);
           }
         } else {
           // Re-randomize geometry EVERY FRAME for realistic jitter
@@ -677,7 +690,6 @@ export class ClubDecor {
           const midX = arc.from.x + (arc.to.x - arc.from.x) * midT;
           const midY = arc.from.y + (Math.random() - 0.5) * 2;
           const midZ = arc.from.z + (Math.random() - 0.5) * 1.5;
-          // Branches fork DOWN toward column tops (y=20 → y=14-18)
           const b1End = { x: midX + (Math.random() - 0.5) * 4, y: midY - 2 - Math.random() * 4, z: midZ + (Math.random() - 0.5) * 2 };
           const b2T = 0.15 + Math.random() * 0.7;
           const b2X = arc.from.x + (arc.to.x - arc.from.x) * b2T;
@@ -688,34 +700,37 @@ export class ClubDecor {
           arc.branch2Line.geometry.dispose();
           arc.branch2Line.geometry = this._createLightningGeo({ x: b2X, y: midY, z: midZ }, b2End, 8, 0.3);
 
-          // Rapid on/off flicker — lightning doesn't stay solid
+          // Rapid on/off flicker — intensity scales with bass
           const flicker = Math.random() > 0.25 ? (0.6 + Math.random() * 0.4) : 0;
-          const energyMult = 0.6 + energy * 0.6;
-          arc.mainMat.opacity = flicker * energyMult;
-          arc.branchMat.opacity = flicker * energyMult * 0.6;
-          arc.branch2Mat.opacity = flicker * energyMult * 0.35;
+          const bassMult = 0.4 + bassLevel * 1.2; // bass drives brightness
+          arc.mainMat.opacity = Math.min(1.0, flicker * bassMult);
+          arc.branchMat.opacity = Math.min(1.0, flicker * bassMult * 0.6);
+          arc.branch2Mat.opacity = Math.min(1.0, flicker * bassMult * 0.35);
 
-          // Sustain pillar glow while arc is active
+          // Sustain pillar glow while arc is active — scaled by bass
           const pg = this.pillarGlows[arc.pillarIndex];
           if (pg && flicker > 0) {
-            const si = 0.5 + energy * 0.4 + (isBeat ? 0.2 : 0);
+            const si = 0.3 + bassLevel * 0.7;
             pg.leftIntensity = Math.min(1.0, Math.max(pg.leftIntensity, si));
             pg.rightIntensity = Math.min(1.0, Math.max(pg.rightIntensity, si));
           }
         }
       } else if (arc.cooldown <= 0) {
-        // Re-strike continuation or fresh strike
+        // Re-strike continuation or fresh bass-driven strike
         const isRestrike = arc._restrike;
-        const fireChance = isRestrike ? 1.0 : (0.015 + energy * 0.1);
-        const beatChance = isBeat ? 0.85 : 0;
-        if (Math.random() < fireChance || (isBeat && energy > 0.1 && Math.random() < beatChance)) {
+        // Fresh strikes: ONLY fire on bass energy, no random chance
+        const shouldFire = isRestrike
+          ? bassActive   // re-strikes continue only if bass is still active
+          : (bassLevel > 0.15 && Math.random() < bassLevel * 0.6)  // probability scales with bass
+            || (isBeat && bassLevel > BASS_THRESHOLD);              // beat + any bass = fire
+        if (shouldFire) {
           arc.isOn = true;
           arc._restrike = false;
-          // Short burst per stroke: 1-3 frames
-          arc.duration = 0.016 + Math.random() * 0.035;
+          // Stroke duration scales with bass intensity
+          arc.duration = 0.016 + Math.random() * 0.035 + bassLevel * 0.015;
           if (!isRestrike) {
-            // Fresh strike: set up multi-stroke count (1-4 re-strikes)
-            arc.strikeCount = 1 + Math.floor(Math.random() * 3) + (isBeat ? 1 : 0);
+            // More re-strikes when bass is heavier
+            arc.strikeCount = 1 + Math.floor(bassLevel * 4) + (isBeat ? 1 : 0);
           }
           arc.mainLine.geometry.dispose();
           arc.mainLine.geometry = this._createLightningGeo(arc.from, arc.to, 24, 0.8);
@@ -725,7 +740,7 @@ export class ClubDecor {
           arc.branch2Line.geometry = this._createLightningGeo(arc.midPoint2, arc.branchEnd2, 8, 0.3);
           const pg = this.pillarGlows[arc.pillarIndex];
           if (pg) {
-            const si = 0.6 + energy * 0.4 + (isBeat ? 0.3 : 0);
+            const si = 0.4 + bassLevel * 0.6;
             pg.leftIntensity = Math.min(1.0, si);
             pg.rightIntensity = Math.min(1.0, si);
           }
