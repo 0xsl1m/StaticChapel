@@ -659,14 +659,13 @@ export class Cathedral {
     this.group.add(roseGroup);
     this.roseWindow = roseGroup;
 
-    // Multi-colored rose window light (warm with purple tint)
-    // decay=0.5 so light actually reaches nearby surfaces (default 2.0 kills it at distance)
-    const roseLight = new THREE.PointLight(0xbb66ff, 0.5, 30, 0.5);
-    roseLight.position.set(0, 20, -this.naveLength / 2 + 3);
+    // Rose window lights — cast purple/warm glow into back of nave
+    // Positioned well in front of the window so light illuminates floor/walls
+    const roseLight = new THREE.PointLight(0xbb66ff, 1.0, 40, 0.3);
+    roseLight.position.set(0, 16, -this.naveLength / 2 + 5);
     this.group.add(roseLight);
-    // Secondary warm accent
-    const roseWarmLight = new THREE.PointLight(0xffeedd, 0.2, 20, 0.5);
-    roseWarmLight.position.set(0, 18, -this.naveLength / 2 + 3);
+    const roseWarmLight = new THREE.PointLight(0xffeedd, 0.4, 25, 0.3);
+    roseWarmLight.position.set(0, 12, -this.naveLength / 2 + 6);
     this.group.add(roseWarmLight);
   }
 
@@ -1241,7 +1240,7 @@ export class Cathedral {
     // Subtle stained glass color cycling
     for (const win of this.windows) {
       const shift = Math.sin(time * 0.3 + win.z * 0.1) * 0.1;
-      const intensity = 0.35 + shift * 0.5;
+      const intensity = 0.28 + shift * 0.3;
       for (const panel of win.panels) {
         panel.material.opacity = intensity;
       }

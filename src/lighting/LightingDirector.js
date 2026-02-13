@@ -109,8 +109,8 @@ export class LightingDirector {
     this.allFixtures = [];
 
     // ---- Program / crossfade state ----
-    this.currentProgram = 10;    // Start in Blackout Pulse (silence)
-    this.targetProgram = 10;
+    this.currentProgram = 3;     // Start in Void Pulse (visible lights immediately)
+    this.targetProgram = 3;
     this.crossfadeProgress = 1.0; // 1 = fully arrived at current
     this.crossfadeDuration = 3.0; // seconds — slow, smooth transitions
     this.crossfading = false;
@@ -337,11 +337,11 @@ export class LightingDirector {
     // global post-program multiplier that preserves relative dynamics
     // while preventing wash-out. This is the ONLY place brightness is
     // controlled — individual program values remain untouched.
-    const GLOBAL_SCALE = 0.5;
+    const GLOBAL_SCALE = 0.7;
 
     // Per-fixture-type clamping (applied AFTER scaling)
-    const SPOT_MAX = 2.0;
-    const PAR_MAX = 1.2;
+    const SPOT_MAX = 2.5;
+    const PAR_MAX = 1.8;
     const STROBE_MAX = 2.5;
 
     for (const spot of this.frontTrussSpots) {

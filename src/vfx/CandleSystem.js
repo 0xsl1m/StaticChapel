@@ -32,7 +32,7 @@ export class CandleSystem {
     const zStart = -25;
     const zEnd = 18;
     const zSpan = zEnd - zStart;
-    const yPos = 3; // wall bracket height
+    const yPos = 2.5; // wall sconce height (~eye level)
 
     // Shared geometries
     const bodyGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 6);
@@ -54,7 +54,7 @@ export class CandleSystem {
     });
 
     for (let side = 0; side < 2; side++) {
-      const xPos = side === 0 ? -9.5 : 9.5;
+      const xPos = side === 0 ? -10.3 : 10.3; // on column faces (columns at ±10)
 
       for (let i = 0; i < candlesPerSide; i++) {
         const z = zStart + (i / (candlesPerSide - 1)) * zSpan;
