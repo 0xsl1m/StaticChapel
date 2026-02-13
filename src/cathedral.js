@@ -459,8 +459,9 @@ export class Cathedral {
     const roseGroup = new THREE.Group();
     const radius = 4.5;
 
-    const traceryMat = new THREE.MeshStandardMaterial({
-      color: 0x0a0a14, roughness: 0.85, metalness: 0.1, side: THREE.DoubleSide
+    // MeshBasicMaterial so stage lights don't color-cycle the rose window tracery
+    const traceryMat = new THREE.MeshBasicMaterial({
+      color: 0x0a0a14, side: THREE.DoubleSide
     });
 
     // ======== OUTER FRAME — thick stone ring ========

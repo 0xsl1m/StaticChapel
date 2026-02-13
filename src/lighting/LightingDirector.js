@@ -337,12 +337,12 @@ export class LightingDirector {
     // global post-program multiplier that preserves relative dynamics
     // while preventing wash-out. This is the ONLY place brightness is
     // controlled — individual program values remain untouched.
-    const GLOBAL_SCALE = 0.7;
+    const GLOBAL_SCALE = 1.0;
 
     // Per-fixture-type clamping (applied AFTER scaling)
-    const SPOT_MAX = 2.5;
-    const PAR_MAX = 1.8;
-    const STROBE_MAX = 2.5;
+    const SPOT_MAX = 3.5;
+    const PAR_MAX = 2.5;
+    const STROBE_MAX = 3.0;
 
     for (const spot of this.frontTrussSpots) {
       spot.intensity = Math.min(spot.intensity * GLOBAL_SCALE, SPOT_MAX);
