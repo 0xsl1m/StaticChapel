@@ -476,21 +476,66 @@ export class ClubDecor {
   createPillarGlows() {
     const spacing = NAVE_LENGTH / 13;
     const pillarH = 28;
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: 0x6688ff, transparent: true, opacity: 0,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    // More height segments so the UV-based sweep looks smooth
+    const glowGeo = new THREE.CylinderGeometry(0.65, 0.65, pillarH, 8, 32, true);
+
+    // ShaderMaterial: electricity sweeps top→bottom via uWaveFront uniform
+    const makeGlowMat = () => new THREE.ShaderMaterial({
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uWaveFront: { value: -1.0 },  // -1 = off, 0 = top, 1 = bottom (grounded)
+        uIntensity: { value: 0.0 },
+        uColor: { value: new THREE.Color(0x6688ff) },
+      },
+      vertexShader: `
+        varying float vHeight;
+        void main() {
+          // UV.y: 0 at bottom of cylinder, 1 at top
+          vHeight = 1.0 - uv.y; // invert so 0=top, 1=bottom
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uWaveFront;
+        uniform float uIntensity;
+        uniform vec3 uColor;
+        varying float vHeight;
+        void main() {
+          if (uIntensity <= 0.0 || uWaveFront < -0.5) discard;
+          // Bright leading edge at wavefront, fading trail above
+          float dist = vHeight - uWaveFront;
+          // Leading edge: sharp bright band (width ~0.08 of pillar height)
+          float edge = exp(-dist * dist * 600.0);
+          // Trail above wavefront: fades out behind the sweep
+          float trail = dist < 0.0 ? exp(dist * 8.0) : 0.0;
+          // Ground flash: when wavefront near bottom, brief bright base
+          float groundFlash = uWaveFront > 0.85 ? exp(-(1.0 - vHeight) * (1.0 - vHeight) * 200.0) * (uWaveFront - 0.85) * 6.667 : 0.0;
+          float alpha = (edge * 1.0 + trail * 0.4 + groundFlash * 0.8) * uIntensity;
+          if (alpha < 0.005) discard;
+          // Brighter white at leading edge, base color in trail
+          vec3 col = mix(uColor, vec3(0.85, 0.92, 1.0), edge * 0.7);
+          gl_FragColor = vec4(col, min(alpha, 0.5));
+        }
+      `,
     });
-    const glowGeo = new THREE.CylinderGeometry(0.65, 0.65, pillarH, 8, 1, true);
 
     for (let i = 0; i < 12; i++) {
       const z = -NAVE_LENGTH / 2 + spacing * (i + 1);
-      const leftGlow = new THREE.Mesh(glowGeo, glowMat.clone());
+      const leftGlow = new THREE.Mesh(glowGeo, makeGlowMat());
       leftGlow.position.set(-NAVE_WIDTH / 2, pillarH / 2, z);
       this.group.add(leftGlow);
-      const rightGlow = new THREE.Mesh(glowGeo, glowMat.clone());
+      const rightGlow = new THREE.Mesh(glowGeo, makeGlowMat());
       rightGlow.position.set(NAVE_WIDTH / 2, pillarH / 2, z);
       this.group.add(rightGlow);
-      this.pillarGlows.push({ left: leftGlow, right: rightGlow, leftIntensity: 0, rightIntensity: 0, index: i });
+      this.pillarGlows.push({
+        left: leftGlow, right: rightGlow,
+        leftWave: -1, rightWave: -1,       // wavefront position (-1=off, 0=top, 1=bottom)
+        leftIntensity: 0, rightIntensity: 0,
+        index: i,
+      });
     }
   }
 
@@ -630,14 +675,32 @@ export class ClubDecor {
   }
 
   _updatePillarGlows() {
+    // Sweep speed: wavefront travels top→bottom in ~250ms (4.0/sec)
+    const SWEEP_SPEED = 4.0 * 0.016; // per frame at 60fps
+    const FADE_RATE = 0.08;           // fast intensity decay after grounding
+
     this.pillarGlows.forEach(pg => {
-      // Decay — slower falloff so glow lingers after strike
-      pg.leftIntensity = Math.max(0, pg.leftIntensity - 0.03);
-      pg.rightIntensity = Math.max(0, pg.rightIntensity - 0.03);
-      pg.left.material.opacity = pg.leftIntensity * 0.3;
-      pg.right.material.opacity = pg.rightIntensity * 0.3;
-      pg.left.material.color.setRGB(0.4 + pg.leftIntensity * 0.6, 0.53 + pg.leftIntensity * 0.47, 1.0);
-      pg.right.material.color.setRGB(0.4 + pg.rightIntensity * 0.6, 0.53 + pg.rightIntensity * 0.47, 1.0);
+      // --- Left pillar ---
+      if (pg.leftWave >= 0 && pg.leftWave < 1.0) {
+        // Actively sweeping down
+        pg.leftWave = Math.min(1.0, pg.leftWave + SWEEP_SPEED);
+      } else if (pg.leftWave >= 1.0) {
+        // Grounded — rapid fade
+        pg.leftIntensity = Math.max(0, pg.leftIntensity - FADE_RATE);
+        if (pg.leftIntensity <= 0) pg.leftWave = -1;
+      }
+      pg.left.material.uniforms.uWaveFront.value = pg.leftWave;
+      pg.left.material.uniforms.uIntensity.value = pg.leftIntensity;
+
+      // --- Right pillar ---
+      if (pg.rightWave >= 0 && pg.rightWave < 1.0) {
+        pg.rightWave = Math.min(1.0, pg.rightWave + SWEEP_SPEED);
+      } else if (pg.rightWave >= 1.0) {
+        pg.rightIntensity = Math.max(0, pg.rightIntensity - FADE_RATE);
+        if (pg.rightIntensity <= 0) pg.rightWave = -1;
+      }
+      pg.right.material.uniforms.uWaveFront.value = pg.rightWave;
+      pg.right.material.uniforms.uIntensity.value = pg.rightIntensity;
     });
   }
 
@@ -707,10 +770,13 @@ export class ClubDecor {
           arc.branchMat.opacity = Math.min(1.0, flicker * bassMult * 0.6);
           arc.branch2Mat.opacity = Math.min(1.0, flicker * bassMult * 0.35);
 
-          // Sustain pillar glow while arc is active — scaled by bass
+          // Trigger pillar glow sweep while arc is active — scaled by bass
           const pg = this.pillarGlows[arc.pillarIndex];
           if (pg && flicker > 0) {
             const si = 0.3 + bassLevel * 0.7;
+            // Reset wavefront to top if not already sweeping
+            if (pg.leftWave < 0) pg.leftWave = 0;
+            if (pg.rightWave < 0) pg.rightWave = 0;
             pg.leftIntensity = Math.min(1.0, Math.max(pg.leftIntensity, si));
             pg.rightIntensity = Math.min(1.0, Math.max(pg.rightIntensity, si));
           }
@@ -741,6 +807,9 @@ export class ClubDecor {
           const pg = this.pillarGlows[arc.pillarIndex];
           if (pg) {
             const si = 0.4 + bassLevel * 0.6;
+            // Start sweep from top of pillar
+            pg.leftWave = 0;
+            pg.rightWave = 0;
             pg.leftIntensity = Math.min(1.0, si);
             pg.rightIntensity = Math.min(1.0, si);
           }
