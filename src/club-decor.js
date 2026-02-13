@@ -82,6 +82,7 @@ export class ClubDecor {
   build() {
     this.createChandeliers();
     this.createCocktailBar();
+    this.createFurniture();
     this.createPillarGlows();
     this.createElectricArcs();
     this.createStaticParticles();
@@ -284,13 +285,54 @@ export class ClubDecor {
         ), pilX, alcoveBaseY + alcoveH + 0.15, alcoveZ + 0.04));
       }
 
-      // Arch top (semicircle)
-      const archCrownGeo = new THREE.CylinderGeometry(alcoveW / 2 - 0.15, alcoveW / 2 - 0.15, 0.06, 12, 1, false, 0, Math.PI);
-      const archCrown = new THREE.Mesh(archCrownGeo, archTrimMat);
-      archCrown.rotation.x = Math.PI / 2;
-      archCrown.rotation.z = Math.PI;
-      archCrown.position.set(ax, alcoveBaseY + alcoveH, alcoveZ + 0.06);
-      bar.add(archCrown);
+      // Moon phase disc above alcove (7 alcoves = 7 phases)
+      // Phases: new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter
+      const moonR = alcoveW / 2 - 0.25;
+      const moonY = alcoveBaseY + alcoveH + moonR * 0.5;
+      const moonZ = alcoveZ + 0.08;
+      const moonMat = new THREE.MeshStandardMaterial({
+        color: 0xf0e8d0, roughness: 0.3, metalness: 0.6,
+        emissive: 0xf0e8d0, emissiveIntensity: 0.06,
+      });
+      const darkMat = new THREE.MeshStandardMaterial({
+        color: 0x0a0a0e, roughness: 0.8, metalness: 0.0,
+      });
+      // Full moon disc (always present as base)
+      const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(moonR, 24), moonMat);
+      moonDisc.position.set(ax, moonY, moonZ);
+      bar.add(moonDisc);
+      // Shadow disc to carve out moon phase
+      // phase 0=new(all dark), 1=wax crescent, 2=first quarter, 3=wax gibbous,
+      // 4=full(no shadow), 5=wane gibbous, 6=last quarter
+      if (a !== 4) { // full moon has no shadow
+        const shadow = new THREE.Mesh(new THREE.CircleGeometry(moonR * 1.02, 24), darkMat);
+        shadow.position.set(ax, moonY, moonZ + 0.005);
+        // Offset shadow disc to create phase shape
+        if (a === 0) {
+          // New moon: shadow covers entire disc
+          shadow.position.z = moonZ + 0.003;
+        } else if (a === 1) {
+          // Waxing crescent: shadow shifted right, small sliver of light on right
+          shadow.position.x = ax + moonR * 0.6;
+        } else if (a === 2) {
+          // First quarter: shadow covers left half
+          shadow.position.x = ax + moonR * 0.45;
+          shadow.scale.x = 0.7;
+        } else if (a === 3) {
+          // Waxing gibbous: small shadow on left
+          shadow.position.x = ax + moonR * 0.3;
+          shadow.scale.x = 0.45;
+        } else if (a === 5) {
+          // Waning gibbous: small shadow on right
+          shadow.position.x = ax - moonR * 0.3;
+          shadow.scale.x = 0.45;
+        } else if (a === 6) {
+          // Last quarter: shadow covers right half
+          shadow.position.x = ax - moonR * 0.45;
+          shadow.scale.x = 0.7;
+        }
+        bar.add(shadow);
+      }
 
       // Gold arch trim ring
       bar.add(place(new THREE.Mesh(
@@ -480,6 +522,407 @@ export class ClubDecor {
     }
 
     this.group.add(bar);
+  }
+
+  // ==================================================================
+  //  FURNITURE — Ultra-premium plush sectionals, lounge chairs, tables
+  //  Layout: rear half of nave from bar (z≈-27) to dancefloor (z≈-2)
+  //  Columns at x=±10, side aisles extend to x=±16
+  // ==================================================================
+  createFurniture() {
+    const M = getMats();
+    const colSpacing = NAVE_LENGTH / 13; // ≈4.615m between column pairs
+    // Column Z positions: z = -30 + colSpacing * (i+1)
+    const colZ = i => -NAVE_LENGTH / 2 + colSpacing * (i + 1);
+
+    // Furniture zone: bar front (~z=-27) to dancefloor edge (z≈-2)
+    // Column pairs 0-4 fall in this range (z ≈ -25.4 to -6.9)
+
+    // ======== NAVE CENTER — Large sectional groupings between columns ========
+    // These sit in the center of the nave (x ≈ -7 to +7) between column pairs
+
+    // --- Bay 0-1 (z ≈ -25 to -21): Near-bar lounge — large L-sectional facing stage ---
+    const bay01z = (colZ(0) + colZ(1)) / 2; // ≈ -23.1
+    this._placeSectionalGroup(0, bay01z, 0, 'velvetNavy', 'L', 5.0, M);
+
+    // --- Bay 1-2 (z ≈ -21 to -16): Deep lounge — U-sectional with coffee table ---
+    const bay12z = (colZ(1) + colZ(2)) / 2; // ≈ -18.5
+    this._placeSectionalGroup(0, bay12z, 0, 'velvetCrimson', 'U', 5.5, M);
+
+    // --- Bay 2-3 (z ≈ -16 to -12): Mid lounge — pair of facing sofas ---
+    const bay23z = (colZ(2) + colZ(3)) / 2; // ≈ -13.8
+    this._placeFacingSofas(0, bay23z, 'velvetEmerald', M);
+
+    // --- Bay 3-4 (z ≈ -12 to -7): Transition — scattered chairs + end tables ---
+    const bay34z = (colZ(3) + colZ(4)) / 2; // ≈ -9.2
+    this._placeChairCluster(0, bay34z, 'velvetPlum', M);
+
+    // ======== SIDE AISLES — Intimate seating against outer walls ========
+    // Side aisle: x = ±10 to ±16, furniture at x ≈ ±13 (centered in aisle)
+    // Each bay between column pairs gets a small seating group
+
+    const sideGroups = [
+      // Left side aisle
+      { x: -13, z: colZ(0), rot: 0.15 * Math.PI,  style: 'sofa',  color: 'velvetCrimson' },
+      { x: -13, z: colZ(1), rot: 0.2 * Math.PI,   style: 'chair', color: 'cognac' },
+      { x: -13, z: colZ(2), rot: 0.25 * Math.PI,  style: 'sofa',  color: 'velvetPlum' },
+      { x: -13, z: colZ(3), rot: 0.3 * Math.PI,   style: 'chair', color: 'oxblood' },
+      { x: -13, z: colZ(4), rot: 0.2 * Math.PI,   style: 'sofa',  color: 'velvetNavy' },
+      // Right side aisle
+      { x: 13, z: colZ(0), rot: -0.15 * Math.PI, style: 'sofa',  color: 'velvetEmerald' },
+      { x: 13, z: colZ(1), rot: -0.2 * Math.PI,  style: 'chair', color: 'oxblood' },
+      { x: 13, z: colZ(2), rot: -0.25 * Math.PI, style: 'sofa',  color: 'velvetCrimson' },
+      { x: 13, z: colZ(3), rot: -0.3 * Math.PI,  style: 'chair', color: 'cognac' },
+      { x: 13, z: colZ(4), rot: -0.2 * Math.PI,  style: 'sofa',  color: 'velvetPlum' },
+    ];
+
+    sideGroups.forEach(sg => {
+      const g = new THREE.Group();
+      if (sg.style === 'sofa') {
+        g.add(this._buildSofa(2.4, 0.95, 0.85, M[sg.color] || M.velvetCrimson, M));
+        // End table beside sofa
+        const et = this._buildEndTable(M);
+        et.position.set(1.4, 0, 0);
+        g.add(et);
+      } else {
+        // Two lounge chairs with end table between
+        const ch1 = this._buildLoungeChair(M[sg.color] || M.cognac, M);
+        ch1.position.set(-0.6, 0, 0);
+        g.add(ch1);
+        const ch2 = this._buildLoungeChair(M[sg.color] || M.cognac, M);
+        ch2.position.set(0.6, 0, 0);
+        g.add(ch2);
+        const et = this._buildEndTable(M);
+        et.position.set(0, 0, 0);
+        g.add(et);
+      }
+      g.position.set(sg.x, 0, sg.z);
+      g.rotation.y = sg.rot;
+      this.group.add(g);
+    });
+  }
+
+  // --- Place a large sectional grouping with coffee table ---
+  _placeSectionalGroup(x, z, rotation, colorName, shape, size, M) {
+    const g = new THREE.Group();
+    const upholstery = M[colorName] || M.velvetCrimson;
+
+    if (shape === 'L') {
+      // L-shaped sectional: long section + short return
+      const longW = size;
+      const shortW = size * 0.6;
+      const depth = 1.1;
+      const h = 0.85;
+      // Long section (along X)
+      g.add(this._buildSofa(longW, depth, h, upholstery, M));
+      // Short return (along Z, attached to right end)
+      const returnSofa = this._buildSofa(shortW, depth, h, upholstery, M);
+      returnSofa.rotation.y = -Math.PI / 2;
+      returnSofa.position.set(longW / 2 - depth / 2, 0, -shortW / 2 + depth / 2);
+      g.add(returnSofa);
+      // Coffee table in the L's inner corner
+      const ct = this._buildCoffeeTable(1.4, 0.7, M);
+      ct.position.set(longW / 2 - 1.2, 0, -1.0);
+      g.add(ct);
+      // End table at far end
+      const et = this._buildEndTable(M);
+      et.position.set(-longW / 2 - 0.4, 0, 0);
+      g.add(et);
+    } else if (shape === 'U') {
+      // U-shaped: center + two returns
+      const centerW = size;
+      const returnW = size * 0.5;
+      const depth = 1.1;
+      const h = 0.85;
+      // Center section
+      g.add(this._buildSofa(centerW, depth, h, upholstery, M));
+      // Left return
+      const leftReturn = this._buildSofa(returnW, depth, h, upholstery, M);
+      leftReturn.rotation.y = Math.PI / 2;
+      leftReturn.position.set(-centerW / 2 + depth / 2, 0, -returnW / 2 + depth / 2);
+      g.add(leftReturn);
+      // Right return
+      const rightReturn = this._buildSofa(returnW, depth, h, upholstery, M);
+      rightReturn.rotation.y = -Math.PI / 2;
+      rightReturn.position.set(centerW / 2 - depth / 2, 0, -returnW / 2 + depth / 2);
+      g.add(rightReturn);
+      // Large coffee table in the center of the U
+      const ct = this._buildCoffeeTable(1.8, 0.9, M);
+      ct.position.set(0, 0, -1.3);
+      g.add(ct);
+    }
+
+    g.position.set(x, 0, z);
+    g.rotation.y = rotation;
+    this.group.add(g);
+  }
+
+  // --- Place two sofas facing each other with coffee table between ---
+  _placeFacingSofas(x, z, colorName, M) {
+    const g = new THREE.Group();
+    const upholstery = M[colorName] || M.velvetEmerald;
+    const sofaW = 3.5;
+    const gap = 2.2; // space between facing sofas
+
+    // Sofa 1 (faces toward stage, sits on -z side)
+    const s1 = this._buildSofa(sofaW, 1.0, 0.85, upholstery, M);
+    s1.position.set(0, 0, gap / 2);
+    g.add(s1);
+
+    // Sofa 2 (faces away from stage, sits on +z side)
+    const s2 = this._buildSofa(sofaW, 1.0, 0.85, upholstery, M);
+    s2.rotation.y = Math.PI;
+    s2.position.set(0, 0, -gap / 2);
+    g.add(s2);
+
+    // Coffee table between them
+    const ct = this._buildCoffeeTable(1.6, 0.8, M);
+    ct.position.set(0, 0, 0);
+    g.add(ct);
+
+    // End tables at each end of the arrangement
+    const et1 = this._buildEndTable(M);
+    et1.position.set(sofaW / 2 + 0.4, 0, 0);
+    g.add(et1);
+    const et2 = this._buildEndTable(M);
+    et2.position.set(-sofaW / 2 - 0.4, 0, 0);
+    g.add(et2);
+
+    g.position.set(x, 0, z);
+    this.group.add(g);
+  }
+
+  // --- Place a scattered cluster of 4 lounge chairs around a coffee table ---
+  _placeChairCluster(x, z, colorName, M) {
+    const g = new THREE.Group();
+    const upholstery = M[colorName] || M.velvetPlum;
+
+    // Central coffee table
+    const ct = this._buildCoffeeTable(1.2, 0.6, M);
+    g.add(ct);
+
+    // 4 chairs in a loose arc facing the table
+    const chairs = [
+      { px: -1.5, pz:  0.8, ry: -0.4 },
+      { px:  1.5, pz:  0.8, ry:  0.4 },
+      { px: -1.3, pz: -1.0, ry: -0.2 + Math.PI },
+      { px:  1.3, pz: -1.0, ry:  0.2 + Math.PI },
+    ];
+    chairs.forEach(c => {
+      const ch = this._buildLoungeChair(upholstery, M);
+      ch.position.set(c.px, 0, c.pz);
+      ch.rotation.y = c.ry;
+      g.add(ch);
+    });
+
+    // End tables between chair pairs
+    const et1 = this._buildEndTable(M);
+    et1.position.set(-2.2, 0, 0);
+    g.add(et1);
+    const et2 = this._buildEndTable(M);
+    et2.position.set(2.2, 0, 0);
+    g.add(et2);
+
+    g.position.set(x, 0, z);
+    this.group.add(g);
+  }
+
+  // ==================================================================
+  //  FURNITURE BUILDERS — Individual piece geometry
+  // ==================================================================
+
+  // --- Plush sectional sofa segment ---
+  _buildSofa(w, d, h, upholsteryMat, M) {
+    const sofa = new THREE.Group();
+    const seatH = 0.42;
+    const cushionH = 0.16;
+    const backH = h - seatH;
+    const armW = 0.14;
+    const legH = 0.1;
+
+    // Legs — brushed brass, inset from corners
+    const legGeo = new THREE.CylinderGeometry(0.025, 0.02, legH, 6);
+    const legInsetX = w / 2 - 0.12;
+    const legInsetZ = d / 2 - 0.1;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      sofa.add(place(new THREE.Mesh(legGeo, M.brass), sx * legInsetX, legH / 2, sz * legInsetZ));
+    });
+
+    // Base frame
+    sofa.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.06, d), M.walnut
+    ), 0, legH + 0.03, 0));
+
+    // Seat cushion — plush, slightly rounded look via multiple layers
+    const seatTop = legH + 0.06;
+    sofa.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - armW * 2 - 0.04, cushionH, d - 0.12), upholsteryMat
+    ), 0, seatTop + cushionH / 2, -0.02));
+    // Seat cushion bevel (slightly wider at top for plush appearance)
+    sofa.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - armW * 2 - 0.08, 0.03, d - 0.16), upholsteryMat
+    ), 0, seatTop + cushionH + 0.015, -0.02));
+
+    // Back cushion — taller, plush
+    const backBaseY = seatTop + cushionH;
+    sofa.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - armW * 2 - 0.06, backH, 0.22), upholsteryMat
+    ), 0, backBaseY + backH / 2, d / 2 - 0.14));
+    // Back cushion pillow top (softer curve approximation)
+    sofa.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - armW * 2 - 0.1, 0.06, 0.18), upholsteryMat
+    ), 0, backBaseY + backH + 0.03, d / 2 - 0.14));
+
+    // Arms — plush padded
+    [-1, 1].forEach(side => {
+      const armX = side * (w / 2 - armW / 2);
+      // Arm body
+      sofa.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(armW, seatH - legH + cushionH * 0.6, d - 0.06), upholsteryMat
+      ), armX, seatTop + (seatH - legH + cushionH * 0.6) / 2 - 0.03, 0));
+      // Arm top pad
+      sofa.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(armW + 0.04, 0.06, d - 0.04), upholsteryMat
+      ), armX, seatTop + seatH - legH + cushionH * 0.6 - 0.03, 0));
+    });
+
+    // Throw pillows — contrasting accent (2-3 per sofa)
+    const pillowCount = Math.max(2, Math.round(w / 1.5));
+    const accentMat = (upholsteryMat === M.velvetCrimson) ? M.velvetNavy
+      : (upholsteryMat === M.velvetNavy) ? M.velvetCrimson
+      : (upholsteryMat === M.velvetEmerald) ? M.velvetPlum
+      : M.velvetEmerald;
+    for (let p = 0; p < pillowCount; p++) {
+      const px = -w / 2 + armW + 0.4 + p * ((w - armW * 2 - 0.8) / Math.max(1, pillowCount - 1));
+      const pillow = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.22, 0.08), accentMat
+      );
+      pillow.position.set(px, backBaseY + 0.12, d / 2 - 0.22);
+      pillow.rotation.x = -0.15;
+      pillow.rotation.y = (Math.random() - 0.5) * 0.3;
+      sofa.add(pillow);
+    }
+
+    return sofa;
+  }
+
+  // --- Plush lounge chair ---
+  _buildLoungeChair(upholsteryMat, M) {
+    const chair = new THREE.Group();
+    const w = 0.85;
+    const d = 0.85;
+    const seatH = 0.4;
+    const legH = 0.1;
+    const cushionH = 0.14;
+    const backH = 0.45;
+
+    // Legs — brass
+    const legGeo = new THREE.CylinderGeometry(0.02, 0.015, legH, 6);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      chair.add(place(new THREE.Mesh(legGeo, M.brass),
+        sx * (w / 2 - 0.08), legH / 2, sz * (d / 2 - 0.08)));
+    });
+
+    // Base frame
+    chair.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.05, d), M.walnut
+    ), 0, legH + 0.025, 0));
+
+    // Seat cushion
+    const seatTop = legH + 0.05;
+    chair.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.14, cushionH, d - 0.1), upholsteryMat
+    ), 0, seatTop + cushionH / 2, -0.02));
+
+    // Back
+    const backBaseY = seatTop + cushionH;
+    chair.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.08, backH, 0.18), upholsteryMat
+    ), 0, backBaseY + backH / 2, d / 2 - 0.12));
+    // Back pillow top
+    chair.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.12, 0.05, 0.14), upholsteryMat
+    ), 0, backBaseY + backH + 0.025, d / 2 - 0.12));
+
+    // Arms
+    [-1, 1].forEach(side => {
+      const armX = side * (w / 2 - 0.06);
+      chair.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, seatH - legH + cushionH * 0.5, d - 0.06), upholsteryMat
+      ), armX, seatTop + (seatH - legH + cushionH * 0.5) / 2 - 0.02, 0));
+    });
+
+    return chair;
+  }
+
+  // --- Low-set coffee table (dark marble top, brass legs) ---
+  _buildCoffeeTable(w, d, M) {
+    const table = new THREE.Group();
+    const topH = 0.04;
+    const legH = 0.38;
+    const totalH = legH + topH;
+
+    // Marble top
+    const topMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a22, roughness: 0.08, metalness: 0.12,
+    });
+    table.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w, topH, d), topMat
+    ), 0, totalH - topH / 2, 0));
+
+    // Gold edge trim
+    const edgeMat = M.brass;
+    table.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w + 0.02, 0.015, d + 0.02), edgeMat
+    ), 0, totalH + 0.007, 0));
+
+    // Under-top frame (dark walnut)
+    table.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.1, 0.03, d - 0.1), M.walnut
+    ), 0, legH - 0.01, 0));
+
+    // Legs — tapered brass
+    const legGeo = new THREE.CylinderGeometry(0.015, 0.025, legH, 6);
+    const lx = w / 2 - 0.08;
+    const lz = d / 2 - 0.06;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      table.add(place(new THREE.Mesh(legGeo, M.brass), sx * lx, legH / 2, sz * lz));
+    });
+
+    return table;
+  }
+
+  // --- End table (smaller, round dark marble top) ---
+  _buildEndTable(M) {
+    const table = new THREE.Group();
+    const topR = 0.25;
+    const legH = 0.52;
+    const topH = 0.03;
+
+    // Round marble top
+    const topMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a22, roughness: 0.08, metalness: 0.12,
+    });
+    table.add(place(new THREE.Mesh(
+      new THREE.CylinderGeometry(topR, topR, topH, 12), topMat
+    ), 0, legH + topH / 2, 0));
+
+    // Gold rim
+    table.add(place(new THREE.Mesh(
+      new THREE.TorusGeometry(topR, 0.008, 6, 16), M.brass
+    ), 0, legH + topH, 0));
+
+    // Single pedestal leg — brass
+    table.add(place(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.035, legH, 8), M.brass
+    ), 0, legH / 2, 0));
+
+    // Base disc
+    table.add(place(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.15, 0.015, 10), M.brass
+    ), 0, 0.008, 0));
+
+    return table;
   }
 
   // ==================================================================
