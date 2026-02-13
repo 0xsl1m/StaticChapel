@@ -81,7 +81,7 @@ export class ClubDecor {
 
   build() {
     this.createChandeliers();
-    // Furniture + bar removed — will be re-addressed later
+    this.createCocktailBar();
     this.createPillarGlows();
     this.createElectricArcs();
     this.createStaticParticles();
@@ -220,156 +220,222 @@ export class ClubDecor {
   }
 
   // ==================================================================
-  //  COCKTAIL BAR — Full-service commercial layout
+  //  COCKTAIL BAR — Premium upscale bar against back wall
+  //  Reference: dark walnut back bar, arched alcove shelving, warm
+  //  backlit bottles, marble counter, brass accents, crimson velvet
   // ==================================================================
   createCocktailBar() {
     const bar = new THREE.Group();
-    bar.position.set(0, 0, -25);
+    // Back wall is at z = -30, place bar flush against it
+    const BAR_Z = -29.2;
+    bar.position.set(0, 0, BAR_Z);
     const M = getMats();
 
-    const barW = 10, barH = 1.1, barD = 0.7;
-    const wellDepth = 1.2, backBarD = 0.55, backBarH = 0.9;
+    const barW = 14;       // wide — spans most of the nave
+    const barH = 1.12;     // counter height
+    const barD = 0.75;     // counter depth
 
-    // ======== PATRON-SIDE BAR COUNTER ========
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW + 0.3, 0.055, barD + 0.2), M.marble), 0, barH, 0));
+    // ======== BACK BAR WALL — dark walnut paneling floor to 4m ========
+    const backWallH = 4.0;
+    const backWallMat = new THREE.MeshStandardMaterial({
+      color: 0x2a1810, roughness: 0.65, metalness: 0.02,
+    });
+    bar.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(barW + 0.4, backWallH, 0.15), backWallMat
+    ), 0, backWallH / 2, -0.6));
 
-    // Brass top rail
-    const topRail = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, barW + 0.2, 8), M.brass);
-    topRail.rotation.z = Math.PI / 2;
-    topRail.position.set(0, barH + 0.02, barD / 2 + 0.1);
-    bar.add(topRail);
+    // ======== ARCHED ALCOVE SHELVING (5 bays) ========
+    const alcoveCount = 5;
+    const alcoveW = (barW - 0.8) / alcoveCount;
+    const alcoveH = 2.8;
+    const alcoveBaseY = barH + 0.15;
+    const alcoveZ = -0.5;
 
-    // Front panel (onyx)
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW, barH - 0.06, 0.06), M.onyx), 0, (barH - 0.06) / 2, barD / 2));
+    // Warm backlight material for alcove interiors
+    const alcoveBackMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1208, roughness: 0.7, metalness: 0.0,
+      emissive: 0xffddaa, emissiveIntensity: 0.08,
+    });
+    const archTrimMat = new THREE.MeshStandardMaterial({
+      color: GOLD_WARM, roughness: 0.25, metalness: 0.85,
+    });
 
-    // Vertical brass fluting
-    for (let i = 0; i < 9; i++) {
-      const stripX = -barW / 2 + 0.5 + i * (barW - 1) / 8;
-      bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.012, barH - 0.12, 0.012), M.brass), stripX, (barH - 0.12) / 2, barD / 2 + 0.035));
+    for (let a = 0; a < alcoveCount; a++) {
+      const ax = -barW / 2 + 0.4 + alcoveW * (a + 0.5);
+
+      // Alcove interior recess
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(alcoveW - 0.2, alcoveH, 0.08), alcoveBackMat
+      ), ax, alcoveBaseY + alcoveH / 2, alcoveZ + 0.03));
+
+      // Walnut pilasters between alcoves
+      if (a > 0) {
+        const pilX = -barW / 2 + 0.4 + alcoveW * a;
+        bar.add(place(new THREE.Mesh(
+          new THREE.BoxGeometry(0.12, alcoveH + 0.3, 0.14), backWallMat
+        ), pilX, alcoveBaseY + alcoveH / 2, alcoveZ + 0.04));
+        // Gold capital on pilaster
+        bar.add(place(new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.08, 0.18), archTrimMat
+        ), pilX, alcoveBaseY + alcoveH + 0.15, alcoveZ + 0.04));
+      }
+
+      // Arch top (semicircle approximation with a box + cone cap)
+      const archCrownGeo = new THREE.CylinderGeometry(alcoveW / 2 - 0.15, alcoveW / 2 - 0.15, 0.06, 12, 1, false, 0, Math.PI);
+      const archCrown = new THREE.Mesh(archCrownGeo, archTrimMat);
+      archCrown.rotation.x = Math.PI / 2;
+      archCrown.rotation.z = Math.PI;
+      archCrown.position.set(ax, alcoveBaseY + alcoveH, alcoveZ + 0.06);
+      bar.add(archCrown);
+
+      // Gold arch trim ring
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(alcoveW - 0.1, 0.04, 0.04), archTrimMat
+      ), ax, alcoveBaseY + alcoveH - 0.02, alcoveZ + 0.08));
+
+      // 3 shelves per alcove
+      const shelfCount = 3;
+      for (let s = 0; s < shelfCount; s++) {
+        const sy = alcoveBaseY + 0.4 + s * (alcoveH - 0.6) / (shelfCount - 1);
+        // Glass shelf (slightly transparent)
+        const shelfMat = new THREE.MeshStandardMaterial({
+          color: 0xeeeef0, roughness: 0.05, metalness: 0.1,
+          transparent: true, opacity: 0.4,
+        });
+        bar.add(place(new THREE.Mesh(
+          new THREE.BoxGeometry(alcoveW - 0.3, 0.02, 0.2), shelfMat
+        ), ax, sy, alcoveZ + 0.06));
+
+        // Brass shelf brackets
+        [-1, 1].forEach(side => {
+          bar.add(place(new THREE.Mesh(
+            new THREE.BoxGeometry(0.02, 0.06, 0.04), M.brass
+          ), ax + side * (alcoveW / 2 - 0.25), sy - 0.03, alcoveZ + 0.06));
+        });
+
+        // Bottles on shelf (3-5 per shelf)
+        if (this.Q.cocktailBarDetail !== 'simple') {
+          const bottleCount = 3 + Math.floor(Math.random() * 3);
+          const bottleColors = [0x1a4d1a, 0x8b1a1a, 0xc49a2a, 0x1a1a5c, 0x5c1a4a, 0x3d2b1a, 0x4a2a10];
+          for (let b = 0; b < bottleCount; b++) {
+            const bx = ax - (alcoveW - 0.5) / 2 + b * ((alcoveW - 0.5) / Math.max(1, bottleCount - 1));
+            const bh = 0.2 + Math.random() * 0.1;
+            const br = 0.018 + Math.random() * 0.01;
+            const bMat = new THREE.MeshStandardMaterial({
+              color: bottleColors[(b + a * 3 + s) % bottleColors.length],
+              roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.85,
+            });
+            bar.add(place(new THREE.Mesh(
+              new THREE.CylinderGeometry(br, br * 1.05, bh, 5), bMat
+            ), bx, sy + bh / 2 + 0.02, alcoveZ + 0.06));
+            // Bottle neck
+            bar.add(place(new THREE.Mesh(
+              new THREE.CylinderGeometry(br * 0.3, br * 0.5, 0.06, 4), bMat
+            ), bx, sy + bh + 0.05, alcoveZ + 0.06));
+          }
+        }
+      }
     }
 
-    // Under-bar glow
+    // Outer pilasters (ends of the back bar)
+    [-1, 1].forEach(side => {
+      const endX = side * (barW / 2 + 0.05);
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, backWallH, 0.2), backWallMat
+      ), endX, backWallH / 2, -0.55));
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(0.24, 0.1, 0.24), archTrimMat
+      ), endX, backWallH + 0.05, -0.55));
+    });
+
+    // ======== CORNICE — gold trim along top of back bar ========
+    bar.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(barW + 0.5, 0.08, 0.2), archTrimMat
+    ), 0, backWallH + 0.04, -0.55));
+
+    // ======== PATRON-SIDE BAR COUNTER ========
+    // Marble top — thick slab
+    const marbleTopMat = new THREE.MeshStandardMaterial({
+      color: 0x1e1e24, roughness: 0.12, metalness: 0.15, // dark marble
+    });
+    bar.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(barW + 0.3, 0.07, barD + 0.2), marbleTopMat
+    ), 0, barH, 0.5));
+
+    // Gold edge trim on counter
+    const edgeTrimGeo = new THREE.BoxGeometry(barW + 0.35, 0.02, 0.02);
+    bar.add(place(new THREE.Mesh(edgeTrimGeo, archTrimMat), 0, barH + 0.035, 0.5 + barD / 2 + 0.1));
+    bar.add(place(new THREE.Mesh(edgeTrimGeo, archTrimMat), 0, barH - 0.035, 0.5 + barD / 2 + 0.1));
+
+    // Front panel — dark onyx with brass fluting
+    const frontPanelMat = new THREE.MeshStandardMaterial({
+      color: 0x12100e, roughness: 0.15, metalness: 0.12,
+    });
+    bar.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(barW, barH - 0.06, 0.06), frontPanelMat
+    ), 0, (barH - 0.06) / 2, 0.5 + barD / 2));
+
+    // Vertical brass fluting on front
+    for (let i = 0; i < 11; i++) {
+      const stripX = -barW / 2 + 0.5 + i * (barW - 1) / 10;
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(0.01, barH - 0.12, 0.01), M.brass
+      ), stripX, (barH - 0.12) / 2, 0.5 + barD / 2 + 0.035));
+    }
+
+    // Under-bar warm glow strip
     const glowMat = new THREE.MeshBasicMaterial({
-      color: 0x4400aa, transparent: true, opacity: 0.12,
+      color: 0xffddaa, transparent: true, opacity: 0.06,
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(barW - 0.6, 0.06), glowMat);
-    glow.position.set(0, 0.04, barD / 2 + 0.04);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(barW - 0.6, 0.04), glowMat);
+    glow.position.set(0, 0.03, 0.5 + barD / 2 + 0.04);
     bar.add(glow);
     this.barGlow = glow;
 
-    // Foot rail
-    const footRail = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, barW - 0.6, 8), M.brass);
+    // Brass foot rail
+    const footRail = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, barW - 0.6, 8), M.brass
+    );
     footRail.rotation.z = Math.PI / 2;
-    footRail.position.set(0, 0.18, barD / 2 + 0.14);
+    footRail.position.set(0, 0.18, 0.5 + barD / 2 + 0.12);
     bar.add(footRail);
-    for (let i = 0; i < 6; i++) {
-      const bx = -barW / 2 + 1.0 + i * (barW - 2) / 5;
-      bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.18, 0.035), M.brass), bx, 0.09, barD / 2 + 0.14));
+    // Foot rail brackets
+    for (let i = 0; i < 7; i++) {
+      const bx = -barW / 2 + 1.0 + i * (barW - 2) / 6;
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(0.02, 0.18, 0.03), M.brass
+      ), bx, 0.09, 0.5 + barD / 2 + 0.12));
     }
 
-    // Back panel
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW, barH - 0.06, 0.04), M.walnut), 0, (barH - 0.06) / 2, -barD / 2));
-
-    // End caps
+    // End caps — onyx
     [-1, 1].forEach(side => {
-      bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.06, barH, barD), M.onyx), side * barW / 2, barH / 2, 0));
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, barH, barD + 0.2), M.onyx
+      ), side * barW / 2, barH / 2, 0.5));
     });
 
-    // ======== BARTENDER WELL ========
-    if (this.Q.cocktailBarDetail !== 'simple') {
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW - 0.4, 0.02, wellDepth - 0.2), M.rubber), 0, 0.01, -barD / 2 - wellDepth / 2));
+    // ======== BARTENDER WORK AREA (between counter and back bar) ========
+    // Rubber mat floor
+    bar.add(place(new THREE.Mesh(
+      new THREE.BoxGeometry(barW - 0.4, 0.02, 1.0), M.rubber
+    ), 0, 0.01, -0.05));
 
     // Speed rail
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW - 1.0, 0.04, 0.1), M.stainless), 0, barH - 0.2, -barD / 2 - 0.08));
-
-    // Speed well bottles
-    const bottleColors = [0x1a4d1a, 0x8b1a1a, 0xc49a2a, 0x1a1a5c, 0x5c1a4a, 0x3d2b1a, 0x1a4a5c];
-    for (let i = 0; i < 14; i++) {
-      const bx = -barW / 2 + 1.0 + i * ((barW - 2) / 13);
-      const bottleH = 0.22 + Math.random() * 0.06;
-      const bottleR = 0.022 + Math.random() * 0.008;
-      const wbMat = new THREE.MeshStandardMaterial({
-        color: bottleColors[i % 7], roughness: 0.08, metalness: 0.15, transparent: true, opacity: 0.85,
-      });
-      bar.add(place(new THREE.Mesh(new THREE.CylinderGeometry(bottleR, bottleR * 1.05, bottleH, 5), wbMat), bx, barH - 0.2 + bottleH / 2 + 0.04, -barD / 2 - 0.08));
-    }
-
-    // Ice wells
-    [-2.5, 2.5].forEach(ix => {
-      bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.3, 0.4), M.stainless), ix, barH - 0.25, -barD / 2 - 0.25));
-    });
-
-    // Sink
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.35), M.stainless), 0, barH - 0.22, -barD / 2 - 0.3));
-
-    // POS terminals
-    [-3.5, 3.5].forEach(px => {
-      bar.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.4, 8), M.chrome), px, barH + 0.2, -0.1));
-      const posScreen = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.02), new THREE.MeshBasicMaterial({ color: 0x111122 }));
-      posScreen.position.set(px, barH + 0.42, -0.1);
-      posScreen.rotation.x = -0.3;
-      bar.add(posScreen);
-    });
-    } // end cocktailBarDetail !== 'simple' (well, speed rail, bottles, ice, sink, POS)
-
-    // ======== BACK BAR ========
-    const backBarZ = -barD / 2 - wellDepth;
-
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW + 0.2, 0.04, backBarD), M.marble), 0, backBarH, backBarZ - backBarD / 2));
-    bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(barW, backBarH - 0.04, backBarD - 0.05), M.walnut), 0, (backBarH - 0.04) / 2, backBarZ - backBarD / 2));
-
-    // Mirror
-    const mirrorZ = backBarZ - backBarD - 0.05;
-    bar.add(place(new THREE.Mesh(new THREE.PlaneGeometry(barW - 0.6, 2.5), M.mirror), 0, 1.6, mirrorZ));
-
-    // Display shelving
-    const shelfW = barW - 0.8;
-    const shelfHeights = [backBarH + 0.35, backBarH + 0.75, backBarH + 1.15];
-    shelfHeights.forEach(sy => {
-      bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(shelfW, 0.03, 0.25), M.walnut), 0, sy, mirrorZ + 0.15));
-    });
-
-    // Shelf uprights
-    [-shelfW / 2, -shelfW / 6, shelfW / 6, shelfW / 2].forEach(sx => {
-      bar.add(place(new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.5, 0.04), M.walnut), sx, backBarH + 0.7, mirrorZ + 0.12));
-    });
-
-    // Shelf lighting
-    bar.add(place(new THREE.PointLight(0xffeedd, 0.1, 5, 2), 0, backBarH + 1.2, mirrorZ + 0.25));
-    bar.add(place(new THREE.PointLight(0xffeedd, 0.06, 4, 2), 0, backBarH + 0.5, mirrorZ + 0.25));
-
-    // Display bottles
     if (this.Q.cocktailBarDetail !== 'simple') {
-    const displayColors = [0x1a4d1a, 0x8b1a1a, 0x1a1a5c, 0xc49a2a, 0x5c1a4a, 0x1a4a5c, 0x3d2b1a, 0x2a1a5c, 0x5c4a1a, 0x1a5c3d, 0x4a1a3d, 0x1a5c5c];
-    shelfHeights.forEach((sy, si) => {
-      const count = si === 1 ? 16 : 12;
-      for (let b = 0; b < count; b++) {
-        const bx = -shelfW / 2 + 0.3 + b * ((shelfW - 0.6) / (count - 1));
-        const h = 0.2 + Math.random() * 0.08;
-        const r = 0.02 + Math.random() * 0.012;
-        const bodyMat = new THREE.MeshStandardMaterial({
-          color: displayColors[(b + si * 4) % displayColors.length],
-          roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.85,
-        });
-        bar.add(place(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.05, h, 6), bodyMat), bx, sy + h / 2 + 0.02, mirrorZ + 0.15));
-        bar.add(place(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.35, r * 0.5, 0.05, 4), bodyMat), bx, sy + h + 0.045, mirrorZ + 0.15));
-      }
-    });
+      bar.add(place(new THREE.Mesh(
+        new THREE.BoxGeometry(barW - 1.0, 0.04, 0.08), M.stainless
+      ), 0, barH - 0.18, 0.3));
 
-    // Work bottles
-    for (let b = 0; b < 8; b++) {
-      const bx = -barW / 2 + 1.5 + b * ((barW - 3) / 7);
-      const h = 0.22 + Math.random() * 0.05;
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: displayColors[(b + 3) % displayColors.length],
-        roughness: 0.06, metalness: 0.15, transparent: true, opacity: 0.85,
+      // Ice wells
+      [-3, 3].forEach(ix => {
+        bar.add(place(new THREE.Mesh(
+          new THREE.BoxGeometry(0.8, 0.25, 0.35), M.stainless
+        ), ix, barH - 0.2, -0.1));
       });
-      bar.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.023, 0.023, h, 6), bodyMat), bx, backBarH + h / 2 + 0.02, backBarZ - backBarD / 2));
     }
-    } // end cocktailBarDetail !== 'simple' (display & work bottles)
 
-    // Signage
+    // ======== SIGNAGE — "STATIC CHAPEL" above back bar ========
     const signCanvas = document.createElement('canvas');
     signCanvas.width = 512;
     signCanvas.height = 96;
@@ -388,7 +454,18 @@ export class ClubDecor {
     ctx.lineTo(412, 62);
     ctx.stroke();
     const signTex = new THREE.CanvasTexture(signCanvas);
-    bar.add(place(new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.5), new THREE.MeshBasicMaterial({ map: signTex, transparent: true, toneMapped: false })), 0, 3.0, mirrorZ - 0.05));
+    bar.add(place(new THREE.Mesh(
+      new THREE.PlaneGeometry(3.5, 0.55),
+      new THREE.MeshBasicMaterial({ map: signTex, transparent: true, toneMapped: false })
+    ), 0, backWallH + 0.5, -0.5));
+
+    // ======== WARM LIGHTING ========
+    // Shelf backlight (warm amber) — only on non-low tier
+    if (this.Q.tier !== 'low') {
+      bar.add(place(new THREE.PointLight(0xffddaa, 0.3, 8, 1.0), 0, 3.0, -0.3));
+      bar.add(place(new THREE.PointLight(0xffddaa, 0.15, 6, 1.0), -4, 2.5, -0.3));
+      bar.add(place(new THREE.PointLight(0xffddaa, 0.15, 6, 1.0), 4, 2.5, -0.3));
+    }
 
     this.group.add(bar);
   }
