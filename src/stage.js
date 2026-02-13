@@ -355,9 +355,9 @@ export class ConcertStage {
     const frontTrussZ = 19.5; // matches truss + sub stack position
     const sideTrussY = STAGE_Y + 7;
 
-    // Respect quality config for fixture counts
-    const frontCount = this.Q.frontTrussSpots || 8;
-    const sideTotal = this.Q.sideTrussSpots || 8;
+    // Respect quality config for fixture counts (handle 0 correctly)
+    const frontCount = this.Q.frontTrussSpots !== undefined ? this.Q.frontTrussSpots : 8;
+    const sideTotal = this.Q.sideTrussSpots !== undefined ? this.Q.sideTrussSpots : 8;
     const sidePerSide = Math.floor(sideTotal / 2);
 
     // Front truss fixtures, evenly spaced

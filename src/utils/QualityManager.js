@@ -104,8 +104,8 @@ const QUALITY_CONFIGS = {
 
     // Stage / LED
     ledPanelCount: 1,                  // center panel only (single screen for Quest 3)
-    ledCanvasRes: 64,                  // 64x64 instead of 128
-    ledUpdateInterval: 3,              // update every 3rd frame
+    ledCanvasRes: 256,                 // 256x256 for decent video quality
+    ledUpdateInterval: 2,              // update every 2nd frame (video needs smooth playback)
     fixtureScreens: false,             // no mini-screens on fixture heads
     beamCoreEnabled: false,            // skip inner beam cores
     beamConesEnabled: false,           // skip ALL beam cones (saves 16+ additive-blend draw calls)
@@ -129,7 +129,7 @@ const QUALITY_CONFIGS = {
     // Club Decor
     chandelierTiers: 1,                // only 1 tier (saves 2/3 of geometry)
     chandelierArmsPerTier: 6,
-    chandelierLightsPerUnit: 1,        // just 1 main light per chandelier (saves 12)
+    chandelierLightsPerUnit: 1,        // 1 main light per chandelier (skip uplight + tier)
     chandelierPendants: false,
     furnitureTufting: false,            // skip diamond/nailhead buttons
     furnitureUnderglow: false,
@@ -142,7 +142,7 @@ const QUALITY_CONFIGS = {
     candleLights: false,               // skip PointLights, keep flame visuals only
 
     // VFX
-    fogParticles: 60,                  // reduced from 150 for Quest 3 72fps target
+    fogParticles: 40,                  // reduced further for stability
     godRays: true,                     // keep — they're cheap geometry
     godRayCount: 8,                    // reduced from 16
     dustMotes: false,
@@ -151,24 +151,26 @@ const QUALITY_CONFIGS = {
     djScreenUpdates: false,            // static screens
     djAvatarDetail: 'simple',
 
-    // Lighting — balanced reduction for Quest 3 Adreno GPU
-    // SpotLights are expensive but we need enough for visible stage lighting
-    maxLights: 20,                     // reasonable cap
-    stainedGlassLights: true,          // keep window lights — essential for atmosphere
-    naveFillLights: 2,                 // reduced from 5
-    ambientIntensity: 0.6,             // slightly elevated ambient
-    hemisphereIntensity: 0.45,
-    frontTrussSpots: 4,                // reduced from 8 (4 SpotLights)
-    sideTrussSpots: 4,                 // reduced from 8 (2 per side)
-    parWashes: 4,                      // reduced from 8 (PointLights, cheaper)
-    laserSpots: 2,                     // reduced from 4
-    strobes: 2,                        // reduced from 6
+    // Lighting — MINIMAL for Quest 3 stability
+    // Quest 3 Adreno 740 can handle ~12-15 total lights before shader complexity
+    // causes frame drops and visual glitching. Every light = per-pixel math.
+    maxLights: 12,
+    stainedGlassLights: false,         // disable 16 window PointLights (biggest perf win)
+    windowLights: false,               // disable 16 window PointLights (biggest perf win)
+    naveFillLights: 2,                 // 2 fill PointLights
+    ambientIntensity: 0.75,            // higher ambient compensates for fewer dynamic lights
+    hemisphereIntensity: 0.55,
+    frontTrussSpots: 4,                // 4 SpotLights on front truss (the main show)
+    sideTrussSpots: 0,                 // disabled — saves 4 SpotLights
+    parWashes: 4,                      // 4 PointLights (cheap, illuminate stage)
+    laserSpots: 0,                     // disabled
+    strobes: 2,                        // 2 PointLights (flash on beat)
 
-    // Update throttling
+    // Update throttling — more aggressive to reduce CPU/GPU load
     organUpdateEvery: 4,
-    soundSystemUpdateEvery: 4,         // increased from 3
-    clubDecorUpdateEvery: 4,           // increased from 3
-    candleUpdateEvery: 4,
+    soundSystemUpdateEvery: 6,
+    clubDecorUpdateEvery: 6,
+    candleUpdateEvery: 6,
     lightingUpdateEvery: 2,            // update lighting programs every other frame
   },
 

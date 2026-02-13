@@ -131,11 +131,11 @@ export class LightingDirector {
   // =========================================================================
 
   _createFixtures() {
-    const frontCount = this.Q.frontTrussSpots || 8;
-    const sideTotal = this.Q.sideTrussSpots || 8;
-    const parCount = this.Q.parWashes || 8;
-    const laserCount = this.Q.laserSpots || 4;
-    const strobeCount = this.Q.strobes || 6;
+    const frontCount = this.Q.frontTrussSpots !== undefined ? this.Q.frontTrussSpots : 8;
+    const sideTotal = this.Q.sideTrussSpots !== undefined ? this.Q.sideTrussSpots : 8;
+    const parCount = this.Q.parWashes !== undefined ? this.Q.parWashes : 8;
+    const laserCount = this.Q.laserSpots !== undefined ? this.Q.laserSpots : 4;
+    const strobeCount = this.Q.strobes !== undefined ? this.Q.strobes : 6;
     const sidePerSide = Math.floor(sideTotal / 2);
 
     // --- Front truss moving head spots ---
@@ -159,13 +159,13 @@ export class LightingDirector {
       this.sideTrussSpots.push(spot);
     }
 
-    // --- PAR wash point lights on stage floor ---
+    // --- PAR wash point lights — elevated on stage for upward/outward wash ---
     for (let i = 0; i < parCount; i++) {
       const angle = (i / parCount) * Math.PI * 2;
       const radius = 5;
       const x = Math.cos(angle) * radius;
       const z = 24 + Math.sin(angle) * radius;
-      const par = this._createPoint(x, 1.6, z, 0.4, 15);
+      const par = this._createPoint(x, 4.0, z, 0.8, 25);
       this.parWashes.push(par);
     }
 
@@ -418,7 +418,7 @@ export class LightingDirector {
       spot.intensity = 2.0 + Math.sin(time * 15 + i) * 1.0;
       const altColor = i % 3 === 0 ? COL.orange : i % 3 === 1 ? COL.crimson : COL.red;
       lerpColor(spot.color, altColor, COL.red, Math.sin(time * 30 + i * 2) * 0.5 + 0.5);
-      const isLeft = i < 4;
+      const isLeft = i < Math.floor(this.sideTrussSpots.length / 2);
       const phase = time * 1.8 + i * 1.2;
       spot.target.position.set(
         (isLeft ? 1 : -1) * (2 + Math.sin(phase) * 5),
@@ -478,7 +478,7 @@ export class LightingDirector {
     const coldSideColors = [COL.iceBlue, COL.cyan, COL.blue, COL.indigo];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
-      const isLeft = i < 4;
+      const isLeft = i < Math.floor(this.sideTrussSpots.length / 2);
       const localIdx = isLeft ? i : i - 4;
       const phase = slowSweep + localIdx * 0.7;
       spot.intensity = 0.4 + Math.sin(time * 0.5 + i * 0.8) * 0.3;
@@ -542,7 +542,7 @@ export class LightingDirector {
     const sideColors = [COL.violet, COL.cyan, COL.magenta, COL.iceBlue];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
-      const isLeft = i < 4;
+      const isLeft = i < Math.floor(this.sideTrussSpots.length / 2);
       const phase = rotSpeed * 0.8 + i * 1.1;
       spot.color.copy(sideColors[i % sideColors.length]);
       spot.intensity = 0.8 + energy * 1.5;
@@ -668,7 +668,7 @@ export class LightingDirector {
     const warmSideColors = [COL.amber, COL.orange, COL.gold, COL.yellow];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
-      const isLeft = i < 4;
+      const isLeft = i < Math.floor(this.sideTrussSpots.length / 2);
       const phase = time * 0.3 + i * 1.2;
       lerpColor(spot.color, warmSideColors[i % warmSideColors.length], COL.amber, Math.sin(phase) * 0.5 + 0.5);
       spot.intensity = 0.4 + breath * 0.5;
@@ -837,7 +837,7 @@ export class LightingDirector {
     // Side truss: indigo/green wave, cross-beams on floor
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
-      const isLeft = i < 4;
+      const isLeft = i < Math.floor(this.sideTrussSpots.length / 2);
       const wave = Math.sin(waveSpeed - i * 0.8 + Math.PI) * 0.5 + 0.5;
       lerpColor(spot.color, COL.indigo, COL.green, wave);
       spot.intensity = 0.5 + bassNorm * 2.5;
@@ -901,7 +901,7 @@ export class LightingDirector {
     // Side truss: rainbow cascade, cross-beams on floor
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
-      const isLeft = i < 4;
+      const isLeft = i < Math.floor(this.sideTrussSpots.length / 2);
       const hue = (rotSpeed + 0.5 + i / this.sideTrussSpots.length) % 1.0;
       hueToColor(spot.color, hue);
       spot.intensity = 1.0 + energy * 1.5;
@@ -1002,7 +1002,7 @@ export class LightingDirector {
     const gothicSideColors = [COL.violet, COL.gold, COL.indigo, COL.amber];
     for (let i = 0; i < this.sideTrussSpots.length; i++) {
       const spot = this.sideTrussSpots[i];
-      const isLeft = i < 4;
+      const isLeft = i < Math.floor(this.sideTrussSpots.length / 2);
       const phase = slowCircle + i * 0.8;
       spot.color.copy(gothicSideColors[i % gothicSideColors.length]);
       spot.intensity = 0.6 + incenseBreath * 0.6;
