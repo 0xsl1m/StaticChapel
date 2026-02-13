@@ -9,18 +9,18 @@
 import * as THREE from 'three';
 
 // --- Color constants ---
-const MARBLE_COLOR = 0xc8bfb4;   // warm cream marble (matches cathedral floor)
+const MARBLE_COLOR = 0x2e2e34;   // dark charcoal marble with gold veins
 const METAL_COLOR = 0xc0c0cc;    // bright silver metallic for pipes
 const GOLD_COLOR = 0xFFD700;
 
-// --- Frequency band glow colors ---
+// --- Frequency band glow colors (metallic tones) ---
 const BAND_COLORS = {
-  subBass: new THREE.Color(0x4400AA),   // deep purple/red
-  bass:    new THREE.Color(0xFF00FF),   // magenta
-  lowMid:  new THREE.Color(0x2244FF),   // blue
-  mid:     new THREE.Color(0x00FFFF),   // cyan
-  highMid: new THREE.Color(0xFFD700),   // gold
-  treble:  new THREE.Color(0xEEEEFF),   // white/silver
+  subBass: new THREE.Color(0x4a4a55),   // dark steel / iron
+  bass:    new THREE.Color(0x8B4513),   // dark bronze
+  lowMid:  new THREE.Color(0xB87333),   // copper
+  mid:     new THREE.Color(0xDAA520),   // warm gold
+  highMid: new THREE.Color(0xFFD700),   // bright gold
+  treble:  new THREE.Color(0xD0D0DD),   // bright silver / platinum
 };
 
 /**
@@ -341,22 +341,19 @@ export class PipeOrgan {
   //  DECORATIONS  - gothic tracery accents, gold trim
   // ------------------------------------------------------------------
   createDecorations() {
-    // Soft white par cans illuminating the organ facade from below
-    // Positioned in front of the organ, angled up to wash the marble and pipes
-    const parPositions = [
-      [-5, this.baseY + 0.3, this.organZ - 2],
-      [-2.5, this.baseY + 0.3, this.organZ - 2],
-      [0, this.baseY + 0.3, this.organZ - 2],
-      [2.5, this.baseY + 0.3, this.organZ - 2],
-      [5, this.baseY + 0.3, this.organZ - 2],
+    // Soft white wash lights illuminating the organ facade
+    // 2 PointLights (much cheaper than 5 SpotLights — Quest 3 safe)
+    // Skip entirely on low tier to stay within light budget
+    if (this.Q.tier === 'low') return;
+
+    const washPositions = [
+      [-4, this.baseY + 0.5, this.organZ - 2.5],
+      [4, this.baseY + 0.5, this.organZ - 2.5],
     ];
-    for (const [px, py, pz] of parPositions) {
-      const par = new THREE.SpotLight(0xfff8ee, 1.2, 30, Math.PI / 5, 0.6, 0.5);
-      par.position.set(px, py, pz);
-      par.target.position.set(px, this.baseY + 15, this.organZ);
-      par.castShadow = false;
-      this.group.add(par);
-      this.group.add(par.target);
+    for (const [px, py, pz] of washPositions) {
+      const wash = new THREE.PointLight(0xfff8ee, 0.8, 25, 0.5);
+      wash.position.set(px, py, pz);
+      this.group.add(wash);
     }
   }
 

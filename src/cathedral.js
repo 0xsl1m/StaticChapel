@@ -659,14 +659,8 @@ export class Cathedral {
     this.group.add(roseGroup);
     this.roseWindow = roseGroup;
 
-    // Rose window lights — cast purple/warm glow into back of nave
-    // Positioned well in front of the window so light illuminates floor/walls
-    const roseLight = new THREE.PointLight(0xbb66ff, 1.0, 40, 0.3);
-    roseLight.position.set(0, 16, -this.naveLength / 2 + 5);
-    this.group.add(roseLight);
-    const roseWarmLight = new THREE.PointLight(0xffeedd, 0.4, 25, 0.3);
-    roseWarmLight.position.set(0, 12, -this.naveLength / 2 + 6);
-    this.group.add(roseWarmLight);
+    // Rose window lights removed — saves 2 PointLights for Quest 3 budget
+    // The rose window geometry uses MeshBasicMaterial so it glows on its own
   }
 
   createColumns() {
@@ -1033,9 +1027,9 @@ export class Cathedral {
 
   createAltarPlatform() {
     const platformMat = new THREE.MeshStandardMaterial({
-      color: 0xc8bfb4,    // warm cream marble (matches cathedral floor and organ case)
-      roughness: 0.2,
-      metalness: 0.1,
+      color: 0x2e2e34,    // dark charcoal marble (matches organ case)
+      roughness: 0.18,
+      metalness: 0.15,
     });
 
     const stageHeight = 1.5;
