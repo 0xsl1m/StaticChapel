@@ -111,14 +111,24 @@ export class DJBooth {
     this.group.add(topTrim);
 
     // --- Wrap-around LED screens (front + left + right) ---
-    // Each panel has its own canvas for video rendering
+    // One continuous display: the video is sliced across all 3 panels so
+    // the side screens are extensions of the front, not separate copies.
     const panelInset = 0.06; // inset from body edges
     const panelH = BOOTH_H - 0.12; // slightly shorter than body
     const panelY = BOOTH_Y + BOOTH_H / 2; // vertically centered on booth
 
+    const frontW = BOOTH_W - panelInset * 2;  // ~2.88m
+    const sideW = BOOTH_D - panelInset * 2;   // ~1.08m
+    const totalW = sideW + frontW + sideW;     // ~5.04m total wrap
+
+    // Fractional slice of the video each panel gets
+    const leftFrac = sideW / totalW;
+    const frontFrac = frontW / totalW;
+    // rightFrac = leftFrac (symmetric)
+
     this.ledPanels = [];
 
-    const createLEDPanel = (w, h, px, py, pz, ry) => {
+    const createLEDPanel = (w, h, px, py, pz, ry, sliceStart, sliceFrac) => {
       const canvas = document.createElement('canvas');
       canvas.width = 256;
       canvas.height = 128;
@@ -144,34 +154,35 @@ export class DJBooth {
       bezel.rotation.copy(mesh.rotation);
       this.group.add(bezel);
 
-      this.ledPanels.push({ canvas, ctx, texture, mesh });
+      this.ledPanels.push({ canvas, ctx, texture, mesh, sliceStart, sliceFrac });
     };
 
-    // Front panel (facing audience, -Z direction)
-    const frontW = BOOTH_W - panelInset * 2;
-    createLEDPanel(
-      frontW, panelH,
-      0, panelY, BOOTH_CENTER_Z - BOOTH_D / 2 - 0.01,
-      0
-    );
-
-    // Left panel (facing -X, from audience perspective the right side of the booth)
-    const sideW = BOOTH_D - panelInset * 2;
+    // Left side panel — gets the leftmost slice of the video
     createLEDPanel(
       sideW, panelH,
       -BOOTH_W / 2 - 0.01, panelY, BOOTH_CENTER_Z,
-      Math.PI / 2
+      Math.PI / 2,
+      0, leftFrac
     );
 
-    // Right panel (facing +X)
+    // Front panel — gets the center slice
+    createLEDPanel(
+      frontW, panelH,
+      0, panelY, BOOTH_CENTER_Z - BOOTH_D / 2 - 0.01,
+      0,
+      leftFrac, frontFrac
+    );
+
+    // Right side panel — gets the rightmost slice
     createLEDPanel(
       sideW, panelH,
       BOOTH_W / 2 + 0.01, panelY, BOOTH_CENTER_Z,
-      -Math.PI / 2
+      -Math.PI / 2,
+      leftFrac + frontFrac, leftFrac
     );
 
     // Keep facadePanel reference for backwards compat (points to front panel)
-    this.facadePanel = this.ledPanels[0];
+    this.facadePanel = this.ledPanels[1];
   }
 
   /**
@@ -825,7 +836,7 @@ export class DJBooth {
   }
 
   // ------------------------------------------------------------------
-  //  DJ Booth wrap-around LED panels — video + fallback color wash
+  //  DJ Booth wrap-around LED panels — continuous video sliced across panels
   // ------------------------------------------------------------------
   updateFacade(time, energy) {
     if (!this.ledPanels || this.ledPanels.length === 0) return;
@@ -842,13 +853,18 @@ export class DJBooth {
     }
 
     for (let p = 0; p < this.ledPanels.length; p++) {
-      const { canvas, ctx, texture } = this.ledPanels[p];
+      const { canvas, ctx, texture, sliceStart, sliceFrac } = this.ledPanels[p];
       const w = canvas.width;
       const h = canvas.height;
 
       if (videoReady) {
-        // Draw video frame onto LED panel
-        ctx.drawImage(this._ledVideo, 0, 0, w, h);
+        // Draw the panel's slice of the video — creates one continuous image
+        // across left side → front → right side
+        const vw = this._ledVideo.videoWidth || this._ledVideo.width || 256;
+        const vh = this._ledVideo.videoHeight || this._ledVideo.height || 128;
+        const sx = Math.floor(sliceStart * vw);
+        const sw = Math.floor(sliceFrac * vw);
+        ctx.drawImage(this._ledVideo, sx, 0, sw, vh, 0, 0, w, h);
 
         // Beat flash overlay
         if (this.beatImpact > 0.3) {
@@ -856,11 +872,11 @@ export class DJBooth {
           ctx.fillRect(0, 0, w, h);
         }
       } else {
-        // Fallback: audio-reactive color wash until video loads
+        // Fallback: continuous color wash across all panels
         ctx.fillStyle = '#050510';
         ctx.fillRect(0, 0, w, h);
 
-        const hue = ((time * 40) + 200 + p * 60) % 360;
+        const hue = ((time * 40) + 200) % 360;
         const lum = 15 + energy * 35 + this.beatImpact * 20;
         ctx.fillStyle = `hsl(${hue}, 80%, ${lum}%)`;
         ctx.fillRect(0, 0, w, h);

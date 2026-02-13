@@ -17,7 +17,6 @@ import { PlaylistManager } from './audio/PlaylistManager.js';
 import { LightingDirector } from './lighting/LightingDirector.js';
 import { Controls } from './utils/Controls.js';
 import { XRManager } from './utils/XRManager.js';
-import { CandleSystem } from './vfx/CandleSystem.js';
 import { FogSystem } from './vfx/FogSystem.js';
 import { GodRays } from './vfx/GodRays.js';
 import { PostProcessing } from './vfx/PostProcessing.js';
@@ -33,7 +32,7 @@ let renderer, scene, camera, clock;
 let cathedral, organ, stage, soundSystem, djBooth, clubDecor;
 let audioEngine, playlist, lightingDirector;
 let controls, xrManager;
-let candles, fogSystem, godRays, postProcessing;
+let fogSystem, godRays, postProcessing;
 let playerUI, settingsPanel;
 let isInitialized = false;
 let elapsedTime = 0;
@@ -45,7 +44,6 @@ let settings = {
   lightIntensity: 0.7,
   cameraFov: 70,
   godRays: true,
-  candles: true,
   stageFog: true,
   showFps: false,
   showMood: true,
@@ -159,10 +157,7 @@ async function init() {
   // Connect stage fixtures to lighting engine for visual sync
   stage.setLightingDirector(lightingDirector);
 
-  updateLoading(65, 'Lighting candles...');
-  candles = new CandleSystem(scene, Q);
-
-  updateLoading(70, 'Generating fog...');
+  updateLoading(65, 'Generating fog...');
   fogSystem = new FogSystem(scene, { count: Q.fogParticles });
 
   updateLoading(75, 'Creating god rays...');
@@ -341,10 +336,6 @@ function animate() {
   }
 
   // Update VFX
-  if (settings.candles && (frameCount % Q.candleUpdateEvery === 0)) {
-    candles.update(elapsedTime);
-  }
-
   if (settings.stageFog) {
     fogSystem.update(elapsedTime, delta, energy);
   }

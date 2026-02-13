@@ -11,7 +11,6 @@ export class SettingsPanel {
       lightIntensity: 0.7,
       cameraFov: 70,
       godRays: true,
-      candles: true,
       stageFog: true,
       showFps: false,
       showMood: true,
@@ -35,7 +34,6 @@ export class SettingsPanel {
 
     // Toggles
     this._toggle('toggle-godrays', (v) => { this.values.godRays = v; });
-    this._toggle('toggle-candles', (v) => { this.values.candles = v; });
     this._toggle('toggle-stagefog', (v) => { this.values.stageFog = v; });
     this._toggle('toggle-fps', (v) => { this.values.showFps = v; });
     this._toggle('toggle-mood', (v) => { this.values.showMood = v; });
