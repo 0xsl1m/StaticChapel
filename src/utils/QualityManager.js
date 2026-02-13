@@ -162,8 +162,8 @@ const QUALITY_CONFIGS = {
     hemisphereIntensity: 0.55,
     frontTrussSpots: 4,                // 4 SpotLights on front truss (the main show)
     sideTrussSpots: 0,                 // disabled — saves 4 SpotLights
-    parWashes: 4,                      // 4 PointLights (cheap, illuminate stage)
-    laserSpots: 0,                     // disabled
+    parWashes: 0,                      // removed — not visible
+    laserSpots: 2,                     // 2 laser SpotLights (visible beam cones)
     strobes: 2,                        // 2 PointLights (flash on beat)
 
     // Update throttling — more aggressive to reduce CPU/GPU load
@@ -255,6 +255,8 @@ const QUALITY_CONFIGS = {
     maxLights: 60,
     stainedGlassLights: true,
     naveFillLights: 3,
+    parWashes: 0,                      // removed — not visible
+    laserSpots: 4,                     // 4 laser SpotLights with visible beams
     ambientIntensity: 0.35,
     hemisphereIntensity: 0.3,
 
@@ -337,6 +339,8 @@ const QUALITY_CONFIGS = {
     maxLights: 200,
     stainedGlassLights: true,
     naveFillLights: 5,
+    parWashes: 0,                      // removed — not visible
+    laserSpots: 4,                     // 4 laser SpotLights with visible beams
     ambientIntensity: 0.25,
     hemisphereIntensity: 0.2,
 

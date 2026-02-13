@@ -67,7 +67,7 @@ export class ConcertStage {
     if (this.Q.stageFixtureModels !== false) {
       this.createLightFixtures();
     }
-    this.createPARCans();
+    this.createLaserModels();
     if (this.Q.fogMachines !== false) {
       this.createFogMachines();
     }
@@ -509,60 +509,80 @@ export class ConcertStage {
   }
 
   // ==================================================================
-  //  PAR CAN MODELS  (visible fixtures on stage floor matching LightingDirector PARs)
+  //  LASER MODELS  (visible beam cones for LightingDirector laser SpotLights)
+  //  4 lasers at stage corners, floor-mounted, aim at ceiling (y=28)
   // ==================================================================
-  createPARCans() {
-    const parCount = this.Q.parWashes !== undefined ? this.Q.parWashes : 8;
-    if (parCount === 0) return;
+  createLaserModels() {
+    const laserCount = this.Q.laserSpots !== undefined ? this.Q.laserSpots : 4;
+    if (laserCount === 0) return;
+
+    // Laser positions match LightingDirector: stage corners
+    const allPositions = [
+      [-6, 0.5, 20],
+      [6, 0.5, 20],
+      [-6, 0.5, 28],
+      [6, 0.5, 28],
+    ];
 
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x111111, roughness: 0.4, metalness: 0.6,
-    });
-    const lensMat = new THREE.MeshStandardMaterial({
-      color: 0x222222, roughness: 0.2, metalness: 0.3,
-      emissive: new THREE.Color(0x8B00FF),
-      emissiveIntensity: 0.8,
+      color: 0x111111, roughness: 0.3, metalness: 0.7,
     });
 
-    // Match LightingDirector PAR positions: circle of radius 5 around (0, 4.0, 24)
-    // But models sit on stage floor (y=STAGE_Y) aimed upward
-    const parGeo = new THREE.CylinderGeometry(0.12, 0.15, 0.35, 8);
-    const lensGeo = new THREE.CircleGeometry(0.12, 8);
-    const yokeGeo = new THREE.BoxGeometry(0.04, 0.3, 0.04);
+    // Beam cone geometry — very tight (laser-like)
+    // Tip at origin, extends along +Y (same convention as moving head beams)
+    const beamGeo = new THREE.ConeGeometry(1.0, 1.0, 12, 1, true);
+    beamGeo.rotateZ(Math.PI);
+    beamGeo.translate(0, 0.5, 0);
 
-    this.parCanMeshes = [];
+    this.laserModels = [];
 
-    for (let i = 0; i < parCount; i++) {
-      const angle = (i / parCount) * Math.PI * 2;
-      const radius = 5;
-      const x = Math.cos(angle) * radius;
-      const z = 24 + Math.sin(angle) * radius;
+    for (let i = 0; i < Math.min(laserCount, allPositions.length); i++) {
+      const [lx, ly, lz] = allPositions[i];
 
-      const parGroup = new THREE.Group();
+      // Small floor-mounted housing
+      const housing = new THREE.Group();
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.12, 0.25), bodyMat
+      );
+      housing.add(base);
 
-      // Yoke / stand (vertical bar)
-      const yoke = new THREE.Mesh(yokeGeo, bodyMat);
-      yoke.position.y = 0.15;
-      parGroup.add(yoke);
+      // Emissive lens on top
+      const lensMat = new THREE.MeshStandardMaterial({
+        color: 0x222222, roughness: 0.1, metalness: 0.3,
+        emissive: new THREE.Color(0x00ffff),
+        emissiveIntensity: 1.0,
+      });
+      const lens = new THREE.Mesh(
+        new THREE.CircleGeometry(0.08, 8), lensMat
+      );
+      lens.rotation.x = -Math.PI / 2;
+      lens.position.y = 0.065;
+      housing.add(lens);
 
-      // PAR can body (cylinder, tilted upward ~60 degrees)
-      const canGroup = new THREE.Group();
-      canGroup.position.y = 0.3;
-      canGroup.rotation.x = -Math.PI / 3; // tilt upward
+      housing.position.set(lx, ly + STAGE_Y, lz);
+      this.group.add(housing);
 
-      const body = new THREE.Mesh(parGeo, bodyMat);
-      canGroup.add(body);
+      // Beam cone — added to scene (world space) like moving head beams
+      const beamMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.06,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const beam = new THREE.Mesh(beamGeo.clone(), beamMat);
+      this.scene.add(beam);
 
-      // Lens face (glowing front)
-      const lens = new THREE.Mesh(lensGeo, lensMat.clone());
-      lens.position.y = 0.18;
-      canGroup.add(lens);
-
-      parGroup.add(canGroup);
-      parGroup.position.set(x, STAGE_Y, z);
-      this.group.add(parGroup);
-
-      this.parCanMeshes.push({ lens: lens, canGroup });
+      this.laserModels.push({
+        beam,
+        beamMat,
+        lensMat,
+        posX: lx,
+        posY: ly + STAGE_Y,
+        posZ: lz,
+        index: i,
+      });
     }
   }
 
@@ -627,7 +647,7 @@ export class ConcertStage {
       this.updateFixtures(time, bandValues, energy);
       this.updateFixtureScreens(time, energy);
     }
-    this.updatePARCans();
+    this.updateLasers();
   }
 
   // ------------------------------------------------------------------
@@ -831,16 +851,47 @@ export class ConcertStage {
   }
 
   // ------------------------------------------------------------------
-  //  PAR can lens color sync with LightingDirector
+  //  Laser beam sync with LightingDirector laser SpotLights
   // ------------------------------------------------------------------
-  updatePARCans() {
-    if (!this.parCanMeshes || !this.lightingDirector) return;
-    const pars = this.lightingDirector.parWashes;
-    for (let i = 0; i < this.parCanMeshes.length && i < pars.length; i++) {
-      const par = pars[i];
-      const mesh = this.parCanMeshes[i];
-      mesh.lens.material.emissive.copy(par.color);
-      mesh.lens.material.emissiveIntensity = 0.3 + (par.intensity / 2.0) * 2.0;
+  updateLasers() {
+    if (!this.laserModels || !this.lightingDirector) return;
+    const lasers = this.lightingDirector.laserSpots;
+    const _dir = this._laserDir || (this._laserDir = new THREE.Vector3());
+    const _up = this._laserUp || (this._laserUp = new THREE.Vector3(0, 1, 0));
+
+    for (let i = 0; i < this.laserModels.length && i < lasers.length; i++) {
+      const ld = lasers[i];
+      const lm = this.laserModels[i];
+      const tx = ld.target.position.x;
+      const ty = ld.target.position.y;
+      const tz = ld.target.position.z;
+
+      const dx = tx - lm.posX;
+      const dy = ty - lm.posY;
+      const dz = tz - lm.posZ;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      // Position beam at laser housing
+      lm.beam.position.set(lm.posX, lm.posY, lm.posZ);
+
+      if (dist > 0.5) {
+        _dir.set(dx, dy, dz).normalize();
+        lm.beam.quaternion.setFromUnitVectors(_up, _dir);
+
+        // Laser beams are very tight — small radius
+        const beamRadius = dist * Math.tan(0.08); // ~5° spread
+        lm.beam.scale.set(beamRadius, dist, beamRadius);
+      }
+
+      // Sync color + intensity
+      const normalizedIntensity = Math.min(ld.intensity / 3.0, 1.0);
+      lm.beamMat.color.copy(ld.color);
+      lm.beamMat.opacity = normalizedIntensity > 0.01 ? 0.03 + normalizedIntensity * 0.12 : 0;
+      lm.beam.visible = ld.intensity > 0.05;
+
+      // Lens glow
+      lm.lensMat.emissive.copy(ld.color);
+      lm.lensMat.emissiveIntensity = 0.3 + normalizedIntensity * 3.0;
     }
   }
 
