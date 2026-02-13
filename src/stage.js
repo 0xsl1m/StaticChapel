@@ -173,6 +173,27 @@ export class ConcertStage {
     this.ledBacklight = new THREE.PointLight(0x4444ff, 0.18, 16, 1.5);
     this.ledBacklight.position.set(0, STAGE_Y + 5, panelZ - 1.0);
     this.group.add(this.ledBacklight);
+
+    // --- VIDEO ELEMENT for energy sphere program ---
+    this._ledVideo = document.createElement('video');
+    this._ledVideo.src = 'assets/video/energy-sphere.mp4';
+    this._ledVideo.loop = true;
+    this._ledVideo.muted = true;
+    this._ledVideo.playsInline = true;
+    this._ledVideo.crossOrigin = 'anonymous';
+    this._ledVideoReady = false;
+    this._ledVideo.addEventListener('canplaythrough', () => {
+      this._ledVideoReady = true;
+    });
+    // Autoplay on first user gesture
+    const startVideo = () => {
+      this._ledVideo.play().catch(() => {});
+      document.removeEventListener('click', startVideo);
+      document.removeEventListener('touchstart', startVideo);
+    };
+    document.addEventListener('click', startVideo);
+    document.addEventListener('touchstart', startVideo);
+    this._ledVideo.play().catch(() => {}); // attempt immediate autoplay
   }
 
   // ==================================================================
@@ -317,23 +338,28 @@ export class ConcertStage {
     const frontTrussZ = 19.5; // matches truss + sub stack position
     const sideTrussY = STAGE_Y + 7;
 
-    // 8 fixtures on front truss, evenly spaced
-    for (let i = 0; i < 8; i++) {
-      const t = (i + 0.5) / 8;
+    // Respect quality config for fixture counts
+    const frontCount = this.Q.frontTrussSpots || 8;
+    const sideTotal = this.Q.sideTrussSpots || 8;
+    const sidePerSide = Math.floor(sideTotal / 2);
+
+    // Front truss fixtures, evenly spaced
+    for (let i = 0; i < frontCount; i++) {
+      const t = (i + 0.5) / frontCount;
       const x = (t - 0.5) * (STAGE_WIDTH + 1);
       this.createFixture(x, frontTrussY - 0.5, frontTrussZ, 'front', i);
     }
 
-    // 4 fixtures on left truss
-    for (let i = 0; i < 4; i++) {
-      const t = (i + 0.5) / 4;
+    // Left truss fixtures
+    for (let i = 0; i < sidePerSide; i++) {
+      const t = (i + 0.5) / sidePerSide;
       const z = STAGE_FRONT_Z + t * (STAGE_DEPTH + 1);
       this.createFixture(-(STAGE_WIDTH / 2 + 0.5), sideTrussY - 0.5, z, 'left', i);
     }
 
-    // 4 fixtures on right truss
-    for (let i = 0; i < 4; i++) {
-      const t = (i + 0.5) / 4;
+    // Right truss fixtures
+    for (let i = 0; i < sidePerSide; i++) {
+      const t = (i + 0.5) / sidePerSide;
       const z = STAGE_FRONT_Z + t * (STAGE_DEPTH + 1);
       this.createFixture((STAGE_WIDTH / 2 + 0.5), sideTrussY - 0.5, z, 'right', i);
     }
@@ -528,10 +554,10 @@ export class ConcertStage {
   }
 
   // ------------------------------------------------------------------
-  //  LED Panel animation — 6 distinct programs, cycling every ~12 seconds
+  //  LED Panel animation — 6 sacred geometry + video programs
+  //  Cycles every ~15 seconds per program
   // ------------------------------------------------------------------
   updateLEDPanels(time, bandValues, energy) {
-    // Frame-skip for adaptive quality (interval=1 means every frame, 2 means every other, etc.)
     this._ledFrame = (this._ledFrame || 0) + 1;
     if (this._ledFrame % (this._ledUpdateInterval || 1) !== 0) return;
 
@@ -541,34 +567,29 @@ export class ConcertStage {
     const treble = bandValues.treble || 0;
     const subBass = bandValues.subBass || 0;
 
-    // Cycle through 6 programs with smooth crossfade
-    const programDuration = 12.0;
-    const crossfadeDuration = 2.0;
+    const programDuration = 15.0;
     const totalCycle = programDuration * 6;
     const cycleTime = time % totalCycle;
     const programIndex = Math.floor(cycleTime / programDuration) % 6;
-    const programPhase = (cycleTime % programDuration) / programDuration;
 
     for (let i = 0; i < this.ledPanels.length; i++) {
       const panel = this.ledPanels[i];
       const { canvas, ctx, texture, col, row } = panel;
       const w = canvas.width;
       const h = canvas.height;
-
       const nx = col / Math.max(1, this.ledColumns - 1);
       const ny = row / Math.max(1, this.ledRows - 1);
 
-      // Dark base — prevents washout
-      ctx.fillStyle = '#040408';
+      ctx.fillStyle = '#020206';
       ctx.fillRect(0, 0, w, h);
 
       switch (programIndex) {
-        case 0: this._ledProgram_ColorWash(ctx, w, h, time, nx, ny, bass, mid, energy); break;
-        case 1: this._ledProgram_VerticalBars(ctx, w, h, time, nx, ny, bass, mid, highMid, energy); break;
-        case 2: this._ledProgram_Strobe(ctx, w, h, time, nx, ny, bass, treble, energy); break;
-        case 3: this._ledProgram_RadialPulse(ctx, w, h, time, nx, ny, subBass, bass, energy); break;
-        case 4: this._ledProgram_Pixel(ctx, w, h, time, nx, ny, mid, highMid, treble, energy); break;
-        case 5: this._ledProgram_WaveForm(ctx, w, h, time, nx, ny, bass, mid, highMid, energy); break;
+        case 0: this._led_FlowerOfLife(ctx, w, h, time, nx, ny, bass, mid, energy); break;
+        case 1: this._led_Video(ctx, w, h, time, energy, bass); break;
+        case 2: this._led_MetatronsCube(ctx, w, h, time, nx, ny, bass, treble, energy); break;
+        case 3: this._led_FractalZoom(ctx, w, h, time, nx, ny, subBass, bass, energy); break;
+        case 4: this._led_SriYantra(ctx, w, h, time, nx, ny, mid, highMid, energy); break;
+        case 5: this._led_TorusField(ctx, w, h, time, nx, ny, bass, mid, highMid, energy); break;
       }
 
       texture.needsUpdate = true;
@@ -580,245 +601,309 @@ export class ConcertStage {
   }
 
   // ==================================================================
-  //  PRO VJ LED PROGRAMS — Resolume / VDMX inspired
+  //  SACRED GEOMETRY + VIDEO LED PROGRAMS
   //
-  //  Design principles:
-  //  - Deep saturated gradients, not flat fills
-  //  - Panel coherence: nx/ny creates unified image across all panels
-  //  - Beat-reactive intensity with smooth falloff
-  //  - Geometric patterns: tunnels, prisms, Lissajous, kaleidoscope
-  //  - Professional color palettes (not rainbow spam)
+  //  Design: Deep sacred geometric patterns, audio-reactive, cathedral theme
+  //  All use simple math — no external libraries
   // ==================================================================
 
-  // --- Program 0: TUNNEL ZOOM — depth illusion zooming toward viewer ---
-  _ledProgram_ColorWash(ctx, w, h, time, nx, ny, bass, mid, energy) {
+  // --- Program 0: FLOWER OF LIFE — interlocking circles, audio-reactive bloom ---
+  _led_FlowerOfLife(ctx, w, h, time, nx, ny, bass, mid, energy) {
     const cx = w / 2, cy = h / 2;
-    // Color palette: deep magenta → cyan shift over time
-    const baseHue = (time * 8) % 360;
-    const ringCount = 10;
-    for (let r = ringCount - 1; r >= 0; r--) {
-      const phase = ((time * 0.8 + r * 0.1) % 1);
-      const scale = 0.05 + phase * 1.2;
-      const rw = w * scale * 0.6;
-      const rh = h * scale * 0.6;
-      const hue = (baseHue + r * 25 + nx * 40) % 360;
-      const lum = 8 + (1 - phase) * 30 * (0.4 + energy * 0.6) + bass * 15;
-      const alpha = (1 - phase * 0.7) * (0.5 + energy * 0.4);
-      ctx.fillStyle = `hsla(${hue}, 90%, ${Math.min(55, lum)}%, ${Math.min(0.9, alpha)})`;
-      ctx.fillRect(cx - rw / 2, cy - rh / 2, rw, rh);
+    const baseR = w * 0.12 * (1 + bass * 0.3);
+    const hueBase = (time * 12) % 360;
+    const zoom = 1 + Math.sin(time * 0.2) * 0.15 + energy * 0.2;
+
+    ctx.lineWidth = 1 + energy * 1.5;
+
+    // Seed of Life: 7 circles (center + 6 around)
+    const circles = [{ x: 0, y: 0 }];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + time * 0.1;
+      circles.push({ x: Math.cos(a) * baseR * zoom, y: Math.sin(a) * baseR * zoom });
     }
-    // Beat flash overlay
-    if (bass > 0.5) {
-      ctx.fillStyle = `hsla(${baseHue}, 100%, 70%, ${(bass - 0.5) * 0.5})`;
+    // Second ring: 6 more
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + Math.PI / 6 + time * 0.1;
+      circles.push({ x: Math.cos(a) * baseR * 1.73 * zoom, y: Math.sin(a) * baseR * 1.73 * zoom });
+    }
+
+    circles.forEach((c, idx) => {
+      const hue = (hueBase + idx * 25) % 360;
+      const lum = 20 + energy * 30 + mid * 15;
+      const alpha = 0.4 + energy * 0.4 + (idx < 7 ? 0.15 : 0);
+      ctx.strokeStyle = `hsla(${hue}, 90%, ${Math.min(60, lum)}%, ${Math.min(0.9, alpha)})`;
+      ctx.beginPath();
+      ctx.arc(cx + c.x, cy + c.y, baseR * zoom, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    // Central glow on beat
+    if (bass > 0.3) {
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR * zoom * 2);
+      grad.addColorStop(0, `hsla(${hueBase + 180}, 100%, 75%, ${(bass - 0.3) * 0.6})`);
+      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
+      ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     }
   }
 
-  // --- Program 1: GRADIENT SWEEP — smooth horizontal wipe with layered hues ---
-  _ledProgram_VerticalBars(ctx, w, h, time, nx, ny, bass, mid, highMid, energy) {
-    // 3-color gradient that sweeps across the panel array (coherent across panels)
-    const globalX = nx; // 0-1 across all panels left to right
-    const sweep = (time * 0.15) % 1;
-    const hue1 = (time * 12) % 360;
-    const hue2 = (hue1 + 120) % 360;
-    const hue3 = (hue1 + 240) % 360;
-
-    for (let x = 0; x < w; x++) {
-      const t = x / w;
-      const globalT = (globalX + t * 0.3 + sweep) % 1;
-      // Tri-color blend
-      let hue, sat;
-      if (globalT < 0.33) {
-        hue = hue1 + (hue2 - hue1) * (globalT / 0.33);
-        sat = 85;
-      } else if (globalT < 0.66) {
-        hue = hue2 + (hue3 - hue2) * ((globalT - 0.33) / 0.33);
-        sat = 90;
-      } else {
-        hue = hue3 + (hue1 + 360 - hue3) * ((globalT - 0.66) / 0.34);
-        sat = 85;
-      }
-      const lum = 10 + energy * 25 + mid * 15 + Math.sin(time * 4 + t * 6) * 5;
-      ctx.fillStyle = `hsl(${hue % 360}, ${sat}%, ${Math.min(55, lum)}%)`;
-      ctx.fillRect(x, 0, 1, h);
-    }
-    // Horizontal energy bars on beat
-    if (highMid > 0.3) {
-      const barCount = 3 + Math.floor(energy * 4);
-      for (let b = 0; b < barCount; b++) {
-        const by = ((time * 0.5 + b * 0.15 + ny * 0.3) % 1) * h;
-        ctx.fillStyle = `hsla(0, 0%, 95%, ${highMid * 0.35})`;
-        ctx.fillRect(0, by, w, 2);
-      }
-    }
-  }
-
-  // --- Program 2: PRISM FRACTURE — kaleidoscope triangles, bass-reactive ---
-  _ledProgram_Strobe(ctx, w, h, time, nx, ny, bass, treble, energy) {
-    const cx = w / 2, cy = h / 2;
-    const baseHue = (time * 15) % 360;
-    const segments = 6;
-    const baseAngle = time * 0.3 + nx * Math.PI;
-
-    for (let s = 0; s < segments; s++) {
-      const angle = baseAngle + (s / segments) * Math.PI * 2;
-      const nextAngle = baseAngle + ((s + 1) / segments) * Math.PI * 2;
-      const radius = 40 + bass * 50 + energy * 30;
-
-      const hue = (baseHue + s * (360 / segments)) % 360;
-      const lum = 12 + energy * 25 + bass * 18;
-      ctx.fillStyle = `hsla(${hue}, 88%, ${Math.min(55, lum)}%, ${0.5 + energy * 0.35})`;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
-      ctx.lineTo(cx + Math.cos(nextAngle) * radius, cy + Math.sin(nextAngle) * radius);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Inner ring glow
-    const innerR = 8 + bass * 20;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR);
-    grad.addColorStop(0, `hsla(${(baseHue + 180) % 360}, 100%, 80%, ${0.6 + bass * 0.3})`);
-    grad.addColorStop(1, `hsla(${(baseHue + 180) % 360}, 100%, 20%, 0)`);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Treble sparkle overlay
-    if (treble > 0.3) {
-      for (let d = 0; d < 4; d++) {
-        const sx = (Math.sin(time * 5.7 + d * 3.1) * 0.5 + 0.5) * w;
-        const sy = (Math.cos(time * 4.3 + d * 2.7) * 0.5 + 0.5) * h;
-        const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 6);
-        sg.addColorStop(0, `hsla(0, 0%, 100%, ${treble * 0.7})`);
-        sg.addColorStop(1, 'hsla(0, 0%, 100%, 0)');
-        ctx.fillStyle = sg;
+  // --- Program 1: ENERGY SPHERE VIDEO — plays MP4 video to canvas ---
+  _led_Video(ctx, w, h, time, energy, bass) {
+    if (this._ledVideoReady && this._ledVideo && !this._ledVideo.paused) {
+      ctx.drawImage(this._ledVideo, 0, 0, w, h);
+      // Beat-reactive brightness overlay
+      if (bass > 0.4) {
+        ctx.fillStyle = `rgba(100, 60, 255, ${(bass - 0.4) * 0.3})`;
         ctx.fillRect(0, 0, w, h);
       }
+    } else {
+      // Fallback: pulsing energy sphere procedural
+      const cx = w / 2, cy = h / 2;
+      const r = w * 0.25 * (1 + bass * 0.3);
+      const hue = (time * 20) % 360;
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grad.addColorStop(0, `hsla(${hue}, 100%, 80%, ${0.6 + energy * 0.3})`);
+      grad.addColorStop(0.5, `hsla(${(hue + 40) % 360}, 90%, 40%, ${0.3 + energy * 0.2})`);
+      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
     }
   }
 
-  // --- Program 3: WAVE RIBBONS — flowing sine ribbons across panels ---
-  _ledProgram_RadialPulse(ctx, w, h, time, nx, ny, subBass, bass, energy) {
-    const ribbonCount = 5;
-    const baseHue = (time * 10) % 360;
+  // --- Program 2: METATRON'S CUBE — rotating sacred geometry with 13 circles ---
+  _led_MetatronsCube(ctx, w, h, time, nx, ny, bass, treble, energy) {
+    const cx = w / 2, cy = h / 2;
+    const baseR = w * 0.08;
+    const outerR = w * 0.35 * (1 + bass * 0.15);
+    const rot = time * 0.15;
+    const hueBase = (time * 8 + nx * 60) % 360;
 
-    for (let r = 0; r < ribbonCount; r++) {
-      const hue = (baseHue + r * 55) % 360;
-      const lum = 15 + energy * 28 + bass * 12;
-      const alpha = 0.4 + energy * 0.3;
+    // 13 circle positions: center + inner 6 + outer 6
+    const pts = [{ x: cx, y: cy }];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + rot;
+      pts.push({ x: cx + Math.cos(a) * outerR * 0.5, y: cy + Math.sin(a) * outerR * 0.5 });
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + rot;
+      pts.push({ x: cx + Math.cos(a) * outerR, y: cy + Math.sin(a) * outerR });
+    }
 
-      ctx.strokeStyle = `hsla(${hue}, 92%, ${Math.min(55, lum)}%, ${alpha})`;
-      ctx.lineWidth = 3 + subBass * 8 + energy * 4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-
-      for (let x = 0; x <= w; x += 2) {
-        const t = x / w;
-        const globalT = nx + t * 0.2;
-        const freq1 = 3 + r * 1.5;
-        const freq2 = 2 + r * 0.8;
-        const amp = h * 0.3 * (0.5 + bass * 0.5);
-        const y = h / 2
-          + Math.sin(globalT * freq1 * Math.PI + time * (1.5 + r * 0.3)) * amp * 0.6
-          + Math.sin(globalT * freq2 * Math.PI + time * 0.8 + r * 2) * amp * 0.4
-          + r * (h / (ribbonCount + 2)) - h * 0.3;
-
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+    // Draw connecting lines (Metatron's Cube = all points connected)
+    ctx.lineWidth = 0.5 + energy;
+    const lineLum = 15 + energy * 25;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const hue = (hueBase + (i + j) * 12) % 360;
+        ctx.strokeStyle = `hsla(${hue}, 80%, ${Math.min(50, lineLum)}%, ${0.15 + energy * 0.2})`;
+        ctx.beginPath();
+        ctx.moveTo(pts[i].x, pts[i].y);
+        ctx.lineTo(pts[j].x, pts[j].y);
+        ctx.stroke();
       }
+    }
+
+    // Draw circles at each point
+    pts.forEach((p, idx) => {
+      const hue = (hueBase + idx * 27) % 360;
+      const lum = 25 + energy * 30 + bass * 15;
+      ctx.strokeStyle = `hsla(${hue}, 90%, ${Math.min(60, lum)}%, ${0.5 + energy * 0.3})`;
+      ctx.lineWidth = 1 + energy;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, baseR * (idx === 0 ? 1.3 : 1) * (1 + treble * 0.3), 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    // Central star flash
+    if (bass > 0.5) {
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR * 0.4);
+      grad.addColorStop(0, `hsla(${(hueBase + 180) % 360}, 100%, 85%, ${(bass - 0.5) * 0.6})`);
+      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  // --- Program 3: FRACTAL ZOOM — infinite Mandelbrot/Julia set zoom ---
+  _led_FractalZoom(ctx, w, h, time, nx, ny, subBass, bass, energy) {
+    const hueBase = (time * 10) % 360;
+    // Slowly zoom in over time, bass accelerates zoom
+    const zoomLevel = 1.5 + time * 0.05 + bass * 0.5;
+    const scale = Math.pow(0.97, zoomLevel);
+    // Julia set constant — slowly rotating for variety
+    const cR = -0.7 + Math.sin(time * 0.08) * 0.15;
+    const cI = 0.27 + Math.cos(time * 0.06) * 0.1;
+    const maxIter = 24; // low for performance on canvas
+
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+
+    for (let py = 0; py < h; py += 2) { // step 2 for performance
+      for (let px = 0; px < w; px += 2) {
+        let zr = (px - w / 2) / (w * 0.4) * scale;
+        let zi = (py - h / 2) / (h * 0.4) * scale;
+        let iter = 0;
+        while (zr * zr + zi * zi < 4 && iter < maxIter) {
+          const tmp = zr * zr - zi * zi + cR;
+          zi = 2 * zr * zi + cI;
+          zr = tmp;
+          iter++;
+        }
+        const t = iter / maxIter;
+        const hue = (hueBase + t * 300) % 360;
+        const lum = iter === maxIter ? 0 : (15 + t * 45 * (0.5 + energy * 0.5));
+        // Convert HSL to RGB inline for performance
+        const hN = hue / 60;
+        const s = 0.85;
+        const l = Math.min(0.6, lum / 100);
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs(hN % 2 - 1));
+        const m = l - c / 2;
+        let r1 = 0, g1 = 0, b1 = 0;
+        if (hN < 1) { r1 = c; g1 = x; }
+        else if (hN < 2) { r1 = x; g1 = c; }
+        else if (hN < 3) { g1 = c; b1 = x; }
+        else if (hN < 4) { g1 = x; b1 = c; }
+        else if (hN < 5) { r1 = x; b1 = c; }
+        else { r1 = c; b1 = x; }
+        const rV = Math.round((r1 + m) * 255);
+        const gV = Math.round((g1 + m) * 255);
+        const bV = Math.round((b1 + m) * 255);
+
+        // Fill 2x2 block
+        for (let dy = 0; dy < 2 && py + dy < h; dy++) {
+          for (let dx = 0; dx < 2 && px + dx < w; dx++) {
+            const idx = ((py + dy) * w + (px + dx)) * 4;
+            data[idx] = rV; data[idx + 1] = gV; data[idx + 2] = bV; data[idx + 3] = 255;
+          }
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    // Beat glow overlay
+    if (bass > 0.4) {
+      const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.4);
+      grad.addColorStop(0, `hsla(${(hueBase + 180) % 360}, 100%, 70%, ${(bass - 0.4) * 0.4})`);
+      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  // --- Program 4: SRI YANTRA — nested triangles + Fibonacci spiral ---
+  _led_SriYantra(ctx, w, h, time, nx, ny, mid, highMid, energy) {
+    const cx = w / 2, cy = h / 2;
+    const hueBase = (time * 10 + nx * 40) % 360;
+    const pulse = 1 + Math.sin(time * 0.5) * 0.08 + energy * 0.15;
+
+    // 9 interlocking triangles (Sri Yantra simplified)
+    const triangleCount = 9;
+    ctx.lineWidth = 1 + energy;
+
+    for (let i = 0; i < triangleCount; i++) {
+      const frac = i / triangleCount;
+      const r = (w * 0.1 + frac * w * 0.35) * pulse;
+      const rot = (i % 2 === 0 ? 1 : -1) * (time * 0.08 + frac * 0.5);
+      const upward = i % 2 === 0; // alternating up/down triangles
+      const hue = (hueBase + i * 38) % 360;
+      const lum = 20 + energy * 25 + mid * 15;
+      const alpha = 0.35 + energy * 0.3 + (i < 3 ? 0.15 : 0);
+
+      ctx.strokeStyle = `hsla(${hue}, 88%, ${Math.min(55, lum)}%, ${Math.min(0.9, alpha)})`;
+      ctx.beginPath();
+      for (let v = 0; v <= 3; v++) {
+        const a = rot + (v / 3) * Math.PI * 2 + (upward ? -Math.PI / 2 : Math.PI / 2);
+        const px = cx + Math.cos(a) * r;
+        const py = cy + Math.sin(a) * r;
+        if (v === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
       ctx.stroke();
     }
 
-    // Glow at peaks on beat
-    if (bass > 0.45) {
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, `hsla(${baseHue}, 100%, 60%, ${(bass - 0.45) * 0.4})`);
-      grad.addColorStop(0.5, 'hsla(0, 0%, 0%, 0)');
-      grad.addColorStop(1, `hsla(${(baseHue + 180) % 360}, 100%, 60%, ${(bass - 0.45) * 0.4})`);
+    // Fibonacci spiral overlay
+    ctx.lineWidth = 1.5 + highMid * 2;
+    ctx.strokeStyle = `hsla(${(hueBase + 180) % 360}, 85%, ${30 + energy * 25}%, ${0.3 + energy * 0.3})`;
+    ctx.beginPath();
+    const phi = (1 + Math.sqrt(5)) / 2; // golden ratio
+    for (let a = 0; a < Math.PI * 8; a += 0.1) {
+      const spiralR = 2 * Math.pow(phi, a / (Math.PI * 2)) * (1 + mid * 0.3);
+      const sa = a + time * 0.15;
+      const px = cx + Math.cos(sa) * spiralR;
+      const py = cy + Math.sin(sa) * spiralR;
+      if (a === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Center bindu (dot)
+    const binduR = 3 + energy * 4 + mid * 3;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, binduR);
+    grad.addColorStop(0, `hsla(${hueBase}, 100%, 80%, ${0.7 + energy * 0.3})`);
+    grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // --- Program 5: TORUS ENERGY FIELD — particle ring / torus knot ---
+  _led_TorusField(ctx, w, h, time, nx, ny, bass, mid, highMid, energy) {
+    const cx = w / 2, cy = h / 2;
+    const hueBase = (time * 8 + nx * 50) % 360;
+    const majorR = w * 0.28 * (1 + bass * 0.2);
+    const minorR = w * 0.1 * (1 + mid * 0.3);
+
+    // Draw torus cross-section as flowing particles
+    const particleCount = 120;
+    for (let i = 0; i < particleCount; i++) {
+      const t = i / particleCount;
+      // Torus parametric: angle around major radius
+      const theta = t * Math.PI * 2 + time * 0.3;
+      // Multiple loops around minor radius
+      const phi = t * Math.PI * 6 + time * 0.8; // 3:1 knot ratio
+
+      // 2D projection of torus
+      const r = majorR + minorR * Math.cos(phi);
+      const px = cx + r * Math.cos(theta);
+      const py = cy + r * Math.sin(theta) * 0.6; // squash for perspective
+
+      const depth = Math.sin(phi); // -1 to 1, used for brightness
+      const hue = (hueBase + t * 360) % 360;
+      const lum = 20 + (depth * 0.5 + 0.5) * 30 * (0.5 + energy * 0.5);
+      const size = 1.5 + (depth * 0.5 + 0.5) * 2 + energy * 1.5;
+      const alpha = 0.3 + (depth * 0.5 + 0.5) * 0.4 + energy * 0.2;
+
+      ctx.fillStyle = `hsla(${hue}, 90%, ${Math.min(60, lum)}%, ${Math.min(0.9, alpha)})`;
+      ctx.beginPath();
+      ctx.arc(px, py, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Energy flow lines connecting particles
+    ctx.lineWidth = 0.5 + energy;
+    ctx.strokeStyle = `hsla(${(hueBase + 120) % 360}, 80%, ${25 + energy * 20}%, ${0.15 + energy * 0.15})`;
+    ctx.beginPath();
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60;
+      const theta = t * Math.PI * 2 + time * 0.3;
+      const phi = t * Math.PI * 6 + time * 0.8;
+      const r = majorR + minorR * Math.cos(phi);
+      const px = cx + r * Math.cos(theta);
+      const py = cy + r * Math.sin(theta) * 0.6;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Central energy glow
+    if (bass > 0.35) {
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, majorR * 0.5);
+      grad.addColorStop(0, `hsla(${(hueBase + 180) % 360}, 100%, 75%, ${(bass - 0.35) * 0.5})`);
+      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
-    }
-  }
-
-  // --- Program 4: DIGITAL RAIN — matrix-style falling columns ---
-  _ledProgram_Pixel(ctx, w, h, time, nx, ny, mid, highMid, treble, energy) {
-    const colCount = 12;
-    const cellW = w / colCount;
-    const baseHue = (time * 6 + nx * 80) % 360;
-
-    for (let c = 0; c < colCount; c++) {
-      // Each column falls at different speed with different phase
-      const speed = 0.3 + (Math.sin(c * 2.7 + nx * 5) * 0.5 + 0.5) * 0.7;
-      const phase = (time * speed + c * 0.37 + ny * 0.5) % 1;
-      const headY = phase * h * 1.8 - h * 0.3;
-      const tailLen = h * 0.5 + mid * h * 0.4;
-
-      // Gradient trail
-      const x = c * cellW;
-      for (let seg = 0; seg < 16; seg++) {
-        const segY = headY - seg * (tailLen / 16);
-        if (segY < -10 || segY > h + 10) continue;
-        const fade = 1 - seg / 16;
-        const hue = (baseHue + seg * 8) % 360;
-        const lum = fade * (15 + energy * 30 + highMid * 15);
-        ctx.fillStyle = `hsla(${hue}, 85%, ${Math.min(55, lum)}%, ${fade * (0.5 + energy * 0.4)})`;
-        ctx.fillRect(x + 1, segY, cellW - 2, tailLen / 16 + 1);
-      }
-
-      // Bright head pixel
-      if (headY > -5 && headY < h + 5) {
-        ctx.fillStyle = `hsla(${baseHue}, 60%, ${60 + energy * 25}%, ${0.7 + treble * 0.3})`;
-        ctx.fillRect(x, headY - 2, cellW, 4);
-      }
-    }
-  }
-
-  // --- Program 5: SPECTRUM ANALYZER — pro EQ with gradient bars and glow ---
-  _ledProgram_WaveForm(ctx, w, h, time, nx, ny, bass, mid, highMid, energy) {
-    const barCount = 12;
-    const barW = w / barCount;
-    const gap = 2;
-    // Distribute frequency bands across bars with smooth interpolation
-    const bands = [bass, bass * 0.9, bass * 0.7, mid * 0.6 + bass * 0.3,
-                   mid, mid * 0.95, highMid * 0.5 + mid * 0.4,
-                   highMid, highMid * 0.9, highMid * 0.6,
-                   highMid * 0.3, highMid * 0.15];
-
-    const baseHue = (time * 6 + nx * 50) % 360;
-
-    for (let b = 0; b < barCount; b++) {
-      const val = bands[b] * 0.75 + energy * 0.25 + Math.sin(time * 2.5 + b * 0.6) * 0.05;
-      const barH = Math.max(2, val * h * 0.9);
-      const x = b * barW + gap / 2;
-      const bw = barW - gap;
-
-      // Gradient from bottom (warm) to top (cool)
-      const hue1 = (baseHue + b * 12) % 360;
-      const hue2 = (hue1 + 60) % 360;
-      const grad = ctx.createLinearGradient(0, h, 0, h - barH);
-      const lum1 = 15 + energy * 20;
-      const lum2 = 25 + energy * 25 + val * 15;
-      grad.addColorStop(0, `hsl(${hue1}, 90%, ${Math.min(50, lum1)}%)`);
-      grad.addColorStop(0.6, `hsl(${(hue1 + hue2) / 2 % 360}, 88%, ${Math.min(55, (lum1 + lum2) / 2)}%)`);
-      grad.addColorStop(1, `hsl(${hue2}, 85%, ${Math.min(60, lum2)}%)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(x, h - barH, bw, barH);
-
-      // Peak dot (holds briefly then falls)
-      const peakY = h - barH - 3;
-      ctx.fillStyle = `hsla(0, 0%, 95%, ${0.5 + val * 0.4})`;
-      ctx.fillRect(x, peakY, bw, 2);
-
-      // Bar top glow
-      if (val > 0.4) {
-        const glow = ctx.createLinearGradient(0, h - barH - 8, 0, h - barH + 4);
-        glow.addColorStop(0, 'hsla(0, 0%, 100%, 0)');
-        glow.addColorStop(0.5, `hsla(${hue2}, 100%, 70%, ${(val - 0.4) * 0.5})`);
-        glow.addColorStop(1, 'hsla(0, 0%, 100%, 0)');
-        ctx.fillStyle = glow;
-        ctx.fillRect(x - 2, h - barH - 8, bw + 4, 12);
-      }
     }
   }
 

@@ -88,7 +88,7 @@ const QUALITY_CONFIGS = {
     floorSegments: [8, 16],           // PlaneGeometry segments [w, h]
     sacredGeometry: false,             // skip floor patterns entirely
     roseWindowDetail: 'simple',        // fewer circles, no Metatron lines
-    windowLights: false,               // skip per-window PointLights (saves 16 lights)
+    windowLights: true,                // keep window lights — essential for atmosphere
     archSegments: 10,                  // TubeGeometry tubular segments
     archRadialSegments: 4,
     columnClusterShafts: 0,            // skip cluster shafts (saves 192 meshes)
@@ -154,7 +154,7 @@ const QUALITY_CONFIGS = {
     // Lighting — balanced reduction for Quest 3 Adreno GPU
     // SpotLights are expensive but we need enough for visible stage lighting
     maxLights: 20,                     // reasonable cap
-    stainedGlassLights: false,         // save 16 PointLights
+    stainedGlassLights: true,          // keep window lights — essential for atmosphere
     naveFillLights: 2,                 // reduced from 5
     ambientIntensity: 0.6,             // slightly elevated ambient
     hemisphereIntensity: 0.45,
