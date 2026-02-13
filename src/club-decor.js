@@ -574,20 +574,30 @@ export class ClubDecor {
           arc.mainMat.opacity = 0;
           arc.branchMat.opacity = 0;
           arc.branch2Mat.opacity = 0;
-          arc.cooldown = 0.15 + Math.random() * 0.6;
+          arc.cooldown = 0.05 + Math.random() * 0.15;
         } else {
-          const flicker = 0.3 + Math.random() * 0.6;
+          // Re-randomize geometry EVERY FRAME for realistic jitter
+          arc.mainLine.geometry.dispose();
+          arc.mainLine.geometry = this._createLightningGeo(arc.from, arc.to, 24, 0.8);
+          arc.branchLine.geometry.dispose();
+          arc.branchLine.geometry = this._createLightningGeo(arc.midPoint, arc.branchEnd, 10, 0.4);
+          arc.branch2Line.geometry.dispose();
+          arc.branch2Line.geometry = this._createLightningGeo(arc.midPoint2, arc.branchEnd2, 8, 0.3);
+
+          // Rapid on/off flicker — lightning doesn't stay solid
+          const flicker = Math.random() > 0.3 ? (0.5 + Math.random() * 0.5) : 0;
           const energyMult = 0.5 + energy * 0.8;
           arc.mainMat.opacity = flicker * energyMult;
           arc.branchMat.opacity = flicker * energyMult * 0.65;
           arc.branch2Mat.opacity = flicker * energyMult * 0.4;
         }
       } else if (arc.cooldown <= 0) {
-        const fireChance = 0.008 + energy * 0.06;
-        const beatChance = isBeat ? 0.7 : 0;
-        if (Math.random() < fireChance || (isBeat && energy > 0.15 && Math.random() < beatChance)) {
+        const fireChance = 0.015 + energy * 0.1;
+        const beatChance = isBeat ? 0.85 : 0;
+        if (Math.random() < fireChance || (isBeat && energy > 0.1 && Math.random() < beatChance)) {
           arc.isOn = true;
-          arc.duration = 0.03 + Math.random() * 0.15 + (isBeat ? 0.08 : 0);
+          // Very short burst: 1-4 frames (16-64ms), NOT hundreds of ms
+          arc.duration = 0.016 + Math.random() * 0.05;
           arc.mainLine.geometry.dispose();
           arc.mainLine.geometry = this._createLightningGeo(arc.from, arc.to, 24, 0.8);
           arc.branchLine.geometry.dispose();
