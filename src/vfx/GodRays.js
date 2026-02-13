@@ -151,12 +151,13 @@ export class GodRays {
     }
   }
 
-  update(time, midEnergy = 0) {
+  update(time, energy = 0) {
     for (let i = 0; i < this.shafts.length; i++) {
       const s = this.shafts[i];
       const breath = 0.6 + 0.4 * Math.sin(time * 0.4 + s.phaseOffset);
-      const audioBoost = 1.0 + midEnergy * 1.0;
-      const targetOpacity = s.baseOpacity * breath * audioBoost;
+      // Dim with music energy — louder music → dimmer god rays (stage lights dominate)
+      const audioDim = 1.0 - energy * 0.6; // at full energy, dims to 40% of base
+      const targetOpacity = s.baseOpacity * breath * audioDim;
       s.mesh.material.opacity = Math.min(0.22, Math.max(0.03, targetOpacity));
     }
   }

@@ -306,7 +306,7 @@ function animate() {
   const mood = audioEngine.getMood();
 
   // Update cathedral animations (stained glass)
-  cathedral.update(elapsedTime);
+  cathedral.update(elapsedTime, energy);
 
   // Update pipe organ (audio-reactive glow) — throttled on low/medium
   if (frameCount % Q.organUpdateEvery === 0) {
@@ -344,7 +344,7 @@ function animate() {
   }
 
   if (settings.godRays) {
-    godRays.update(elapsedTime, bandValues ? bandValues[3] : 0);
+    godRays.update(elapsedTime, energy);
   }
 
   // Update player UI

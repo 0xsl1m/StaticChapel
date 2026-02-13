@@ -1230,15 +1230,16 @@ export class Cathedral {
   /**
    * Update animated elements
    */
-  update(time) {
-    // Subtle stained glass color cycling
+  update(time, energy = 0) {
+    // Subtle stained glass color cycling + dim with music energy
+    const audioDim = 1.0 - energy * 0.5; // at full energy, dims to 50%
     for (const win of this.windows) {
       const shift = Math.sin(time * 0.3 + win.z * 0.1) * 0.1;
-      const intensity = 0.28 + shift * 0.3;
+      const intensity = (0.28 + shift * 0.3) * audioDim;
       for (const panel of win.panels) {
         panel.material.opacity = intensity;
       }
-      if (win.light) win.light.intensity = 0.06 + shift * 0.015;
+      if (win.light) win.light.intensity = (0.06 + shift * 0.015) * audioDim;
     }
 
     // Rose window slow rotation

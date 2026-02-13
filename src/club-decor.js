@@ -552,18 +552,26 @@ export class ClubDecor {
     // Furniture zone: bar front (~z=-22) to dancefloor edge (z≈-2)
     // Column pairs 0-5 fall in this range
 
+    // Helper: compute rotation.y so local -Z points toward stage center (0, 0, 19)
+    const STAGE_Z = 19;
+    const faceStage = (fx, fz) => {
+      const dx = 0 - fx;
+      const dz = STAGE_Z - fz;
+      return Math.atan2(dx, dz) + Math.PI;
+    };
+
     // ======== NAVE CENTER — Fill the space between column rows (x=±10) ========
     // Push groups closer to columns: x=±6 with 6m wide pieces → edges at x=±3 to ±9
 
     // --- Bay 0-1 (z ≈ -23): Near-bar — L-sectionals flanking center path ---
     const bay01z = (colZ(0) + colZ(1)) / 2;
-    this._placeSectionalGroup(-5.5, bay01z, 0, 'velvetNavy', 'L', 6.0, M);
-    this._placeSectionalGroup(5.5, bay01z, Math.PI, 'velvetEmerald', 'L', 6.0, M);
+    this._placeSectionalGroup(-5.5, bay01z, faceStage(-5.5, bay01z), 'velvetNavy', 'L', 6.0, M);
+    this._placeSectionalGroup(5.5, bay01z, faceStage(5.5, bay01z), 'velvetEmerald', 'L', 6.0, M);
 
     // --- Bay 1-2 (z ≈ -18.5): Deep lounge — two U-sectionals side by side ---
     const bay12z = (colZ(1) + colZ(2)) / 2;
-    this._placeSectionalGroup(-5.0, bay12z, 0, 'velvetCrimson', 'U', 6.0, M);
-    this._placeSectionalGroup( 5.0, bay12z, 0, 'velvetPlum', 'U', 6.0, M);
+    this._placeSectionalGroup(-5.0, bay12z, faceStage(-5.0, bay12z), 'velvetCrimson', 'U', 6.0, M);
+    this._placeSectionalGroup( 5.0, bay12z, faceStage(5.0, bay12z), 'velvetPlum', 'U', 6.0, M);
 
     // --- Bay 2-3 (z ≈ -13.8): Mid lounge — facing sofas pushed wide ---
     const bay23z = (colZ(2) + colZ(3)) / 2;
@@ -576,29 +584,20 @@ export class ClubDecor {
     this._placeChairCluster( 5.5, bay34z, 'velvetNavy', M);
 
     // ======== SIDE AISLES — Intimate seating against outer walls ========
-    // Side aisle: between columns (x=±10) and walls (x=±15.6)
-    // Furniture at x=±13.5 (backs near outer wall), all angled TOWARD stage
-    //
-    // Sofa geometry: back cushion at local +Z, sitter faces local -Z
-    // rotation.y is CCW from above in Three.js:
-    //   Left side (x=-13.5): POSITIVE rot → local +Z (back) rotates toward -X (outer wall)
-    //     → sitter faces +X/+Z (toward nave center + stage) ✓
-    //   Right side (x=+13.5): NEGATIVE rot → local +Z (back) rotates toward +X (outer wall)
-    //     → sitter faces -X/+Z (toward nave center + stage) ✓
 
     const sideGroups = [
-      // Left side aisle — POSITIVE rotations (back toward left wall, face toward stage)
-      { x: -13.5, z: colZ(0), rot:  0.40 * Math.PI, style: 'sofa',  color: 'velvetCrimson' },
-      { x: -13.5, z: colZ(1), rot:  0.35 * Math.PI, style: 'chair', color: 'cognac' },
-      { x: -13.5, z: colZ(2), rot:  0.32 * Math.PI, style: 'sofa',  color: 'velvetPlum' },
-      { x: -13.5, z: colZ(3), rot:  0.28 * Math.PI, style: 'chair', color: 'oxblood' },
-      { x: -13.5, z: colZ(4), rot:  0.25 * Math.PI, style: 'sofa',  color: 'velvetNavy' },
-      // Right side aisle — NEGATIVE rotations (back toward right wall, face toward stage)
-      { x: 13.5, z: colZ(0), rot: -0.40 * Math.PI, style: 'sofa',  color: 'velvetEmerald' },
-      { x: 13.5, z: colZ(1), rot: -0.35 * Math.PI, style: 'chair', color: 'oxblood' },
-      { x: 13.5, z: colZ(2), rot: -0.32 * Math.PI, style: 'sofa',  color: 'velvetCrimson' },
-      { x: 13.5, z: colZ(3), rot: -0.28 * Math.PI, style: 'chair', color: 'cognac' },
-      { x: 13.5, z: colZ(4), rot: -0.25 * Math.PI, style: 'sofa',  color: 'velvetPlum' },
+      // Left side aisle
+      { x: -13.5, z: colZ(0), style: 'sofa',  color: 'velvetCrimson' },
+      { x: -13.5, z: colZ(1), style: 'chair', color: 'cognac' },
+      { x: -13.5, z: colZ(2), style: 'sofa',  color: 'velvetPlum' },
+      { x: -13.5, z: colZ(3), style: 'chair', color: 'oxblood' },
+      { x: -13.5, z: colZ(4), style: 'sofa',  color: 'velvetNavy' },
+      // Right side aisle
+      { x: 13.5, z: colZ(0), style: 'sofa',  color: 'velvetEmerald' },
+      { x: 13.5, z: colZ(1), style: 'chair', color: 'oxblood' },
+      { x: 13.5, z: colZ(2), style: 'sofa',  color: 'velvetCrimson' },
+      { x: 13.5, z: colZ(3), style: 'chair', color: 'cognac' },
+      { x: 13.5, z: colZ(4), style: 'sofa',  color: 'velvetPlum' },
     ];
 
     sideGroups.forEach(sg => {
@@ -622,7 +621,7 @@ export class ClubDecor {
         g.add(et);
       }
       g.position.set(sg.x, 0, sg.z);
-      g.rotation.y = sg.rot;
+      g.rotation.y = faceStage(sg.x, sg.z);
       this.group.add(g);
     });
   }
