@@ -554,10 +554,11 @@ export class ClubDecor {
 
   _updatePillarGlows() {
     this.pillarGlows.forEach(pg => {
-      pg.leftIntensity = Math.max(0, pg.leftIntensity - 0.06);
-      pg.rightIntensity = Math.max(0, pg.rightIntensity - 0.06);
-      pg.left.material.opacity = pg.leftIntensity * 0.25;
-      pg.right.material.opacity = pg.rightIntensity * 0.25;
+      // Decay — slower falloff so glow lingers after strike
+      pg.leftIntensity = Math.max(0, pg.leftIntensity - 0.03);
+      pg.rightIntensity = Math.max(0, pg.rightIntensity - 0.03);
+      pg.left.material.opacity = pg.leftIntensity * 0.3;
+      pg.right.material.opacity = pg.rightIntensity * 0.3;
       pg.left.material.color.setRGB(0.4 + pg.leftIntensity * 0.6, 0.53 + pg.leftIntensity * 0.47, 1.0);
       pg.right.material.color.setRGB(0.4 + pg.rightIntensity * 0.6, 0.53 + pg.rightIntensity * 0.47, 1.0);
     });
@@ -570,34 +571,75 @@ export class ClubDecor {
       if (arc.isOn) {
         arc.duration -= dt;
         if (arc.duration <= 0) {
-          arc.isOn = false;
-          arc.mainMat.opacity = 0;
-          arc.branchMat.opacity = 0;
-          arc.branch2Mat.opacity = 0;
-          arc.cooldown = 0.05 + Math.random() * 0.15;
+          // Check for re-strike (real lightning has 2-5 return strokes)
+          arc.strikeCount = (arc.strikeCount || 1) - 1;
+          if (arc.strikeCount > 0) {
+            // Brief gap between re-strikes (30-60ms dark gap)
+            arc.mainMat.opacity = 0;
+            arc.branchMat.opacity = 0;
+            arc.branch2Mat.opacity = 0;
+            arc.duration = 0.016 + Math.random() * 0.032; // next stroke
+            arc.cooldown = 0.03 + Math.random() * 0.03;   // inter-stroke gap
+            arc.isOn = false;
+            arc._restrike = true;
+          } else {
+            arc.isOn = false;
+            arc._restrike = false;
+            arc.mainMat.opacity = 0;
+            arc.branchMat.opacity = 0;
+            arc.branch2Mat.opacity = 0;
+            arc.cooldown = 0.08 + Math.random() * 0.25;
+          }
         } else {
           // Re-randomize geometry EVERY FRAME for realistic jitter
           arc.mainLine.geometry.dispose();
           arc.mainLine.geometry = this._createLightningGeo(arc.from, arc.to, 24, 0.8);
+
+          // Re-randomize branch endpoints toward columns each frame
+          const midT = 0.2 + Math.random() * 0.6;
+          const midX = arc.from.x + (arc.to.x - arc.from.x) * midT;
+          const midY = arc.from.y + (Math.random() - 0.5) * 2;
+          const midZ = arc.from.z + (Math.random() - 0.5) * 1.5;
+          // Branches fork DOWN toward column tops (y=20 → y=14-18)
+          const b1End = { x: midX + (Math.random() - 0.5) * 4, y: midY - 2 - Math.random() * 4, z: midZ + (Math.random() - 0.5) * 2 };
+          const b2T = 0.15 + Math.random() * 0.7;
+          const b2X = arc.from.x + (arc.to.x - arc.from.x) * b2T;
+          const b2End = { x: b2X + (Math.random() - 0.5) * 3, y: midY - 1.5 - Math.random() * 3, z: midZ + (Math.random() - 0.5) * 1.5 };
+
           arc.branchLine.geometry.dispose();
-          arc.branchLine.geometry = this._createLightningGeo(arc.midPoint, arc.branchEnd, 10, 0.4);
+          arc.branchLine.geometry = this._createLightningGeo({ x: midX, y: midY, z: midZ }, b1End, 10, 0.4);
           arc.branch2Line.geometry.dispose();
-          arc.branch2Line.geometry = this._createLightningGeo(arc.midPoint2, arc.branchEnd2, 8, 0.3);
+          arc.branch2Line.geometry = this._createLightningGeo({ x: b2X, y: midY, z: midZ }, b2End, 8, 0.3);
 
           // Rapid on/off flicker — lightning doesn't stay solid
-          const flicker = Math.random() > 0.3 ? (0.5 + Math.random() * 0.5) : 0;
-          const energyMult = 0.5 + energy * 0.8;
+          const flicker = Math.random() > 0.25 ? (0.6 + Math.random() * 0.4) : 0;
+          const energyMult = 0.6 + energy * 0.6;
           arc.mainMat.opacity = flicker * energyMult;
-          arc.branchMat.opacity = flicker * energyMult * 0.65;
-          arc.branch2Mat.opacity = flicker * energyMult * 0.4;
+          arc.branchMat.opacity = flicker * energyMult * 0.6;
+          arc.branch2Mat.opacity = flicker * energyMult * 0.35;
+
+          // Sustain pillar glow while arc is active
+          const pg = this.pillarGlows[arc.pillarIndex];
+          if (pg && flicker > 0) {
+            const si = 0.5 + energy * 0.4 + (isBeat ? 0.2 : 0);
+            pg.leftIntensity = Math.min(1.0, Math.max(pg.leftIntensity, si));
+            pg.rightIntensity = Math.min(1.0, Math.max(pg.rightIntensity, si));
+          }
         }
       } else if (arc.cooldown <= 0) {
-        const fireChance = 0.015 + energy * 0.1;
+        // Re-strike continuation or fresh strike
+        const isRestrike = arc._restrike;
+        const fireChance = isRestrike ? 1.0 : (0.015 + energy * 0.1);
         const beatChance = isBeat ? 0.85 : 0;
         if (Math.random() < fireChance || (isBeat && energy > 0.1 && Math.random() < beatChance)) {
           arc.isOn = true;
-          // Very short burst: 1-4 frames (16-64ms), NOT hundreds of ms
-          arc.duration = 0.016 + Math.random() * 0.05;
+          arc._restrike = false;
+          // Short burst per stroke: 1-3 frames
+          arc.duration = 0.016 + Math.random() * 0.035;
+          if (!isRestrike) {
+            // Fresh strike: set up multi-stroke count (1-4 re-strikes)
+            arc.strikeCount = 1 + Math.floor(Math.random() * 3) + (isBeat ? 1 : 0);
+          }
           arc.mainLine.geometry.dispose();
           arc.mainLine.geometry = this._createLightningGeo(arc.from, arc.to, 24, 0.8);
           arc.branchLine.geometry.dispose();
@@ -606,7 +648,7 @@ export class ClubDecor {
           arc.branch2Line.geometry = this._createLightningGeo(arc.midPoint2, arc.branchEnd2, 8, 0.3);
           const pg = this.pillarGlows[arc.pillarIndex];
           if (pg) {
-            const si = 0.4 + energy * 0.5 + (isBeat ? 0.3 : 0);
+            const si = 0.6 + energy * 0.4 + (isBeat ? 0.3 : 0);
             pg.leftIntensity = Math.min(1.0, si);
             pg.rightIntensity = Math.min(1.0, si);
           }
