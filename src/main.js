@@ -19,8 +19,7 @@ import { Controls } from './utils/Controls.js';
 import { XRManager } from './utils/XRManager.js';
 import { CandleSystem } from './vfx/CandleSystem.js';
 import { FogSystem } from './vfx/FogSystem.js';
-// God rays removed — not visible on Quest 3
-// import { GodRays } from './vfx/GodRays.js';
+import { GodRays } from './vfx/GodRays.js';
 import { PostProcessing } from './vfx/PostProcessing.js';
 import { PlayerUI } from './ui/PlayerUI.js';
 import { SettingsPanel } from './ui/SettingsPanel.js';
@@ -161,7 +160,8 @@ async function init() {
   updateLoading(70, 'Generating fog...');
   fogSystem = new FogSystem(scene, { count: Q.fogParticles });
 
-  updateLoading(75, 'Finalizing VFX...');
+  updateLoading(75, 'Creating god rays...');
+  godRays = new GodRays(scene);
 
   updateLoading(78, 'Initializing audio engine...');
 
@@ -343,7 +343,9 @@ function animate() {
     fogSystem.update(elapsedTime, delta, energy);
   }
 
-  // God rays removed
+  if (settings.godRays) {
+    godRays.update(elapsedTime, bandValues ? bandValues[3] : 0);
+  }
 
   // Update player UI
   playerUI.update();

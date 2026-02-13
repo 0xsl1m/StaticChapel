@@ -643,12 +643,11 @@ export class Cathedral {
     });
     } // end hexagram (simple mode skip)
 
-    // Central gemstone
+    // Central gemstone — MeshBasicMaterial so it doesn't pick up cycling stage lights
     const gem = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.18, 1),
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff, emissive: 0xcc88ff, emissiveIntensity: 0.6,
-        roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.8,
+      new THREE.MeshBasicMaterial({
+        color: 0xcc88ff, transparent: true, opacity: 0.8,
       })
     );
     gem.position.z = 0.04;

@@ -35,7 +35,7 @@ export class GodRays {
    * so the shaft looks like a translucent volume, not a solid object.
    */
   _createShaftGeo(wallX, windowY, windowZ, side) {
-    // Window: 2m wide (along Z), 8m tall (along Y), pointed arch at top
+    // Window: 2m wide (along Z), 8m tall (along Y), rounded arch at top
     const wW = 2;
     const wH = 8;
     const rectH = wH * 0.7; // rectangular portion
@@ -49,13 +49,27 @@ export class GodRays {
     // Inward direction: left wall (side=-1, wallX<0) -> light goes +X
     const inward = -side;
 
-    // Window outline — 5 points on the inner wall face
+    // Build rounded arch: semicircular arc from top-right through peak to top-left
+    // Arc center is at (rectTopY, windowZ), radius reaches up to peakY
+    const arcRadius = peakY - rectTopY; // vertical radius of the arch
+    const arcSegments = 8; // number of arc segments for smooth curve
+    const archPoints = [];
+    for (let a = 1; a < arcSegments; a++) {
+      // Sweep from just past 0 (right side) to just before PI (left side)
+      // Endpoints excluded — they match top-right and top-left corners
+      const angle = (a / arcSegments) * Math.PI;
+      const az = windowZ + halfZ * Math.cos(angle);  // Z along window width
+      const ay = rectTopY + arcRadius * Math.sin(angle); // Y arches up
+      archPoints.push([wallX, ay, az]);
+    }
+
+    // Window outline — bottom rect + rounded arch top
     const win = [
-      [wallX, botY,     windowZ - halfZ], // 0: bottom-left
-      [wallX, botY,     windowZ + halfZ], // 1: bottom-right
-      [wallX, rectTopY, windowZ + halfZ], // 2: top-right
-      [wallX, peakY,    windowZ],         // 3: arch peak
-      [wallX, rectTopY, windowZ - halfZ], // 4: top-left
+      [wallX, botY,     windowZ - halfZ], // bottom-left
+      [wallX, botY,     windowZ + halfZ], // bottom-right
+      [wallX, rectTopY, windowZ + halfZ], // top-right (arch start)
+      ...archPoints,                       // rounded arch (interior points)
+      [wallX, rectTopY, windowZ - halfZ], // top-left (arch end)
     ];
 
     // Floor projection — each window point casts a ray downward and inward.
