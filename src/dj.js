@@ -129,12 +129,16 @@ export class DJBooth {
     this.ledPanels = [];
 
     const createLEDPanel = (w, h, px, py, pz, ry, sliceStart, sliceFrac) => {
+      // Canvas matches physical panel aspect ratio to avoid stretching
+      const aspect = w / h;
+      const canvasH = 128;
+      const canvasW = Math.round(canvasH * aspect);
       const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 128;
+      canvas.width = canvasW;
+      canvas.height = canvasH;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#050510';
-      ctx.fillRect(0, 0, 256, 128);
+      ctx.fillRect(0, 0, canvasW, canvasH);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.minFilter = THREE.LinearFilter;
@@ -860,11 +864,29 @@ export class DJBooth {
       if (videoReady) {
         // Draw the panel's slice of the video — creates one continuous image
         // across left side → front → right side
+        // Preserve video aspect ratio: cover-fit vertically, crop overflow
         const vw = this._ledVideo.videoWidth || this._ledVideo.width || 256;
         const vh = this._ledVideo.videoHeight || this._ledVideo.height || 128;
         const sx = Math.floor(sliceStart * vw);
         const sw = Math.floor(sliceFrac * vw);
-        ctx.drawImage(this._ledVideo, sx, 0, sw, vh, 0, 0, w, h);
+
+        // Canvas and source slice aspect ratios
+        const canvasAspect = w / h;
+        const sliceAspect = sw / vh;
+
+        let srcX = sx, srcY = 0, srcW = sw, srcH = vh;
+        if (sliceAspect > canvasAspect) {
+          // Source slice is wider than canvas — crop sides
+          const newSW = Math.floor(vh * canvasAspect);
+          srcX = sx + Math.floor((sw - newSW) / 2);
+          srcW = newSW;
+        } else {
+          // Source slice is taller than canvas — crop top/bottom
+          const newSH = Math.floor(sw / canvasAspect);
+          srcY = Math.floor((vh - newSH) / 2);
+          srcH = newSH;
+        }
+        ctx.drawImage(this._ledVideo, srcX, srcY, srcW, srcH, 0, 0, w, h);
 
         // Beat flash overlay
         if (this.beatImpact > 0.3) {
