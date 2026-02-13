@@ -1226,16 +1226,21 @@ export class ClubDecor {
   createElectricArcs() {
     const arcCount = this.Q.electricArcs || 12;
     const spacing = NAVE_LENGTH / 13;
-    const columnPairs = [];
+    // Build all 12 column pair positions along the nave
+    const allPairs = [];
     for (let i = 0; i < 12; i++) {
       const z = -NAVE_LENGTH / 2 + spacing * (i + 1);
-      columnPairs.push({ x: -NAVE_WIDTH / 2, z, y: 20 }, { x: NAVE_WIDTH / 2, z, y: 20 });
+      allPairs.push({
+        from: { x: -NAVE_WIDTH / 2, z, y: 20 },
+        to:   { x:  NAVE_WIDTH / 2, z, y: 20 },
+      });
     }
 
+    // Evenly distribute arcs across all column pairs (not just first N)
+    const step = allPairs.length / arcCount;
     for (let i = 0; i < arcCount; i++) {
-      const leftIdx = i * 2, rightIdx = i * 2 + 1;
-      if (leftIdx >= columnPairs.length || rightIdx >= columnPairs.length) break;
-      const from = columnPairs[leftIdx], to = columnPairs[rightIdx];
+      const pairIdx = Math.min(Math.floor(i * step), allPairs.length - 1);
+      const from = allPairs[pairIdx].from, to = allPairs[pairIdx].to;
 
       const arcGeo = this._createLightningGeo(from, to, 24, 0.8);
       const arcMat = new THREE.LineBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, linewidth: 1 });
@@ -1286,7 +1291,8 @@ export class ClubDecor {
   //  STATIC PARTICLES
   // ==================================================================
   createStaticParticles() {
-    const count = this.Q.staticParticles || 200;
+    const count = this.Q.staticParticles !== undefined ? this.Q.staticParticles : 200;
+    if (count <= 0) return;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const isNearColumn = Math.random() > 0.35;

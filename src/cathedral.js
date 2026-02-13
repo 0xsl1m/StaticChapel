@@ -435,7 +435,7 @@ export class Cathedral {
         // Glow light - colored illumination cast INWARD from windows
         let light = null;
         if (this.Q.windowLights !== false) {
-          light = new THREE.PointLight(color, 0.12, 25);
+          light = new THREE.PointLight(color, 0.09, 30, 0.5);
           light.position.set(side * (this.totalWidth / 2 - 1.5), windowY, z);
           this.group.add(light);
         }
@@ -1244,7 +1244,7 @@ export class Cathedral {
       for (const panel of win.panels) {
         panel.material.opacity = intensity;
       }
-      if (win.light) win.light.intensity = 0.12 + shift * 0.03;
+      if (win.light) win.light.intensity = 0.09 + shift * 0.02;
     }
 
     // Rose window slow rotation

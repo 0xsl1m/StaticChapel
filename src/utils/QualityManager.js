@@ -134,7 +134,7 @@ const QUALITY_CONFIGS = {
     furnitureTufting: false,            // skip diamond/nailhead buttons
     furnitureUnderglow: false,
     electricArcs: 4,                   // 4 instead of 12
-    staticParticles: 50,               // 50 instead of 200
+    staticParticles: 0,                // disabled on Quest 3 — distracting near ceiling
     cocktailBarDetail: 'simple',
 
     // Candles
@@ -151,18 +151,18 @@ const QUALITY_CONFIGS = {
     djScreenUpdates: false,            // static screens
     djAvatarDetail: 'simple',
 
-    // Lighting — aggressive reduction for Quest 3 Adreno GPU
-    // SpotLights are VERY expensive: each costs ~4x a PointLight on mobile GPUs
-    maxLights: 12,                     // hard cap
+    // Lighting — balanced reduction for Quest 3 Adreno GPU
+    // SpotLights are expensive but we need enough for visible stage lighting
+    maxLights: 20,                     // reasonable cap
     stainedGlassLights: false,         // save 16 PointLights
-    naveFillLights: 1,                 // reduced from 5
-    ambientIntensity: 0.7,             // higher ambient compensates for fewer lights
-    hemisphereIntensity: 0.55,
-    frontTrussSpots: 2,                // reduced from 8 (only 2 SpotLights)
-    sideTrussSpots: 2,                 // reduced from 8 (1 per side)
-    parWashes: 2,                      // reduced from 8 (PointLights, cheaper)
-    laserSpots: 0,                     // disabled — saves 2 SpotLights
-    strobes: 1,                        // reduced from 6
+    naveFillLights: 2,                 // reduced from 5
+    ambientIntensity: 0.6,             // slightly elevated ambient
+    hemisphereIntensity: 0.45,
+    frontTrussSpots: 4,                // reduced from 8 (4 SpotLights)
+    sideTrussSpots: 4,                 // reduced from 8 (2 per side)
+    parWashes: 4,                      // reduced from 8 (PointLights, cheaper)
+    laserSpots: 2,                     // reduced from 4
+    strobes: 2,                        // reduced from 6
 
     // Update throttling
     organUpdateEvery: 4,

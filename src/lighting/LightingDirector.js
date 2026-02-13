@@ -212,7 +212,7 @@ export class LightingDirector {
       80,                                // distance (reach full 60m nave)
       angle !== undefined ? angle : Math.PI / 6,
       penumbra !== undefined ? penumbra : 0.4,
-      1                                  // decay
+      0.5                                // decay — reduced from 1.0 so light reaches floor/walls
     );
     spot.position.set(x, y, z);
     spot.castShadow = false; // save GPU; cathedral already has shadow casters
@@ -234,7 +234,7 @@ export class LightingDirector {
       0xffffff,
       intensity !== undefined ? intensity : 1.0,
       distance !== undefined ? distance : 15,
-      1  // decay
+      0.5  // decay — reduced from 1.0 so light reaches surfaces
     );
     point.position.set(x, y, z);
     point.castShadow = false;
@@ -337,12 +337,12 @@ export class LightingDirector {
     // global post-program multiplier that preserves relative dynamics
     // while preventing wash-out. This is the ONLY place brightness is
     // controlled — individual program values remain untouched.
-    const GLOBAL_SCALE = 0.6;
+    const GLOBAL_SCALE = 0.5;
 
     // Per-fixture-type clamping (applied AFTER scaling)
-    const SPOT_MAX = 2.5;
-    const PAR_MAX = 1.5;
-    const STROBE_MAX = 3.0;
+    const SPOT_MAX = 2.0;
+    const PAR_MAX = 1.2;
+    const STROBE_MAX = 2.5;
 
     for (const spot of this.frontTrussSpots) {
       spot.intensity = Math.min(spot.intensity * GLOBAL_SCALE, SPOT_MAX);

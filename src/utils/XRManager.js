@@ -180,6 +180,7 @@ export class XRManager {
     }
 
     // --- Snap turn (right stick) ---
+    // Push right (positive X) = turn right = decrease rotation.y
     if (Math.abs(lookX) > this.snapThreshold && this.snapCooldown <= 0) {
       const snapDir = lookX > 0 ? -1 : 1;
       this.cameraRig.rotation.y += snapDir * this.snapAngle;
@@ -231,9 +232,12 @@ export class XRManager {
       this._right.crossVectors(this._forward, THREE.Object3D.DEFAULT_UP).normalize();
 
       // Build normalized movement direction from stick input
+      // WebXR gamepad: axes[3] negative = push forward, positive = pull back
+      // getWorldDirection() returns camera facing direction in world space
+      // We want push-forward to move in the direction the user is looking
       this._targetMoveDir.set(0, 0, 0);
-      this._targetMoveDir.addScaledVector(this._right, moveX);
-      this._targetMoveDir.addScaledVector(this._forward, -moveY); // -Y = forward on thumbstick
+      this._targetMoveDir.addScaledVector(this._right, -moveX);
+      this._targetMoveDir.addScaledVector(this._forward, moveY);
       this._targetMoveDir.normalize();
 
       // Smoothly blend movement direction (prevents jarring direction changes)
