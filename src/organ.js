@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 
 // --- Color constants ---
-const OAK_COLOR = 0x2a1c10;
-const METAL_COLOR = 0x8c8c96;
+const MARBLE_COLOR = 0xc8bfb4;   // warm cream marble (matches cathedral floor)
+const METAL_COLOR = 0xc0c0cc;    // bright silver metallic for pipes
 const GOLD_COLOR = 0xFFD700;
 
 // --- Frequency band glow colors ---
@@ -82,17 +82,19 @@ export class PipeOrgan {
   //  CASE / FRAME  - dark oak housing
   // ------------------------------------------------------------------
   createCaseFrame() {
-    const oakMatProps = {
-      color: OAK_COLOR,
-      roughness: 0.75,
-      metalness: 0.05,
+    const marbleMatProps = {
+      color: MARBLE_COLOR,
+      roughness: 0.25,
+      metalness: 0.1,
     };
-    if (this.textures.wood) {
-      const wt = this.textures.wood;
-      if (wt.map) { wt.map.repeat.set(2, 3); oakMatProps.map = wt.map; }
-      if (wt.normalMap) { wt.normalMap.repeat.set(2, 3); oakMatProps.normalMap = wt.normalMap; oakMatProps.normalScale = new THREE.Vector2(0.6, 0.6); }
-    }
-    const oakMat = new THREE.MeshStandardMaterial(oakMatProps);
+    const marbleMat = new THREE.MeshStandardMaterial(marbleMatProps);
+
+    // Gold accent material for trim and decorative elements
+    const goldTrimMat = new THREE.MeshStandardMaterial({
+      color: GOLD_COLOR,
+      roughness: 0.2,
+      metalness: 0.9,
+    });
 
     // Central back panel
     const backW = 14;
@@ -100,23 +102,33 @@ export class PipeOrgan {
     const backD = 0.6;
     const backPanel = new THREE.Mesh(
       new THREE.BoxGeometry(backW, backH, backD),
-      oakMat
+      marbleMat
     );
     backPanel.position.set(this.organX, this.baseY + backH / 2, this.organZ + backD / 2);
     backPanel.castShadow = true;
     backPanel.receiveShadow = true;
     this.group.add(backPanel);
 
+    // Gold horizontal trim bands across the back panel
+    [0.2, 0.4, 0.6, 0.8].forEach(frac => {
+      const trimY = this.baseY + backH * frac;
+      const trim = new THREE.Mesh(
+        new THREE.BoxGeometry(backW + 0.1, 0.08, backD + 0.05),
+        goldTrimMat
+      );
+      trim.position.set(this.organX, trimY, this.organZ + backD / 2);
+      this.group.add(trim);
+    });
+
     // Side towers (taller flanking sections)
     const towerW = 1.8;
     const towerH = backH + 2;
     const towerD = 1.2;
-    const towerMat = oakMat.clone();
 
     [-1, 1].forEach(side => {
       const tower = new THREE.Mesh(
         new THREE.BoxGeometry(towerW, towerH, towerD),
-        towerMat
+        marbleMat
       );
       tower.position.set(
         this.organX + side * (backW / 2 + towerW / 2 - 0.3),
@@ -126,9 +138,21 @@ export class PipeOrgan {
       tower.castShadow = true;
       this.group.add(tower);
 
-      // Pointed tower cap
+      // Gold vertical trim on tower edges
+      const edgeTrim = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, towerH, 0.08),
+        goldTrimMat
+      );
+      edgeTrim.position.set(
+        tower.position.x - side * (towerW / 2 - 0.04),
+        this.baseY + towerH / 2,
+        this.organZ - towerD / 2
+      );
+      this.group.add(edgeTrim);
+
+      // Pointed tower cap — gold
       const capGeo = new THREE.ConeGeometry(towerW / 1.4, 2.5, 4);
-      const cap = new THREE.Mesh(capGeo, towerMat);
+      const cap = new THREE.Mesh(capGeo, goldTrimMat);
       cap.position.set(
         tower.position.x,
         this.baseY + towerH + 1.25,
@@ -138,9 +162,9 @@ export class PipeOrgan {
       this.group.add(cap);
     });
 
-    // Central pointed crown
+    // Central pointed crown — gold
     const crownGeo = new THREE.ConeGeometry(2, 3, 4);
-    const crown = new THREE.Mesh(crownGeo, oakMat);
+    const crown = new THREE.Mesh(crownGeo, goldTrimMat);
     crown.position.set(this.organX, this.baseY + backH + 1.5, this.organZ);
     crown.rotation.y = Math.PI / 4;
     this.group.add(crown);
@@ -152,17 +176,11 @@ export class PipeOrgan {
   createPipes() {
     const metalMatProps = {
       color: METAL_COLOR,
-      roughness: 0.3,
-      metalness: 0.8,
+      roughness: 0.15,
+      metalness: 0.9,
       emissive: new THREE.Color(0x000000),
       emissiveIntensity: 0,
     };
-    if (this.textures.metal) {
-      const mt = this.textures.metal;
-      if (mt.map) { mt.map.repeat.set(1, 2); metalMatProps.map = mt.map; }
-      if (mt.normalMap) { mt.normalMap.repeat.set(1, 2); metalMatProps.normalMap = mt.normalMap; metalMatProps.normalScale = new THREE.Vector2(0.4, 0.4); }
-      if (mt.roughnessMap) { mt.roughnessMap.repeat.set(1, 2); metalMatProps.roughnessMap = mt.roughnessMap; }
-    }
     const metalMat = new THREE.MeshStandardMaterial(metalMatProps);
 
     const goldAccentMat = new THREE.MeshStandardMaterial({
@@ -252,15 +270,11 @@ export class PipeOrgan {
     const consoleZ = this.organZ - 0.3; // tight against organ back panel, behind LED screens
     const consoleBaseY = this.baseY + 0.3;
 
-    // Console housing
+    // Console housing — marble to match organ case
     const housingGeo = new THREE.BoxGeometry(2.5, 3.0, 1.2);
-    const housingProps = { color: OAK_COLOR, roughness: 0.7, metalness: 0.05 };
-    if (this.textures.wood) {
-      const wt = this.textures.wood;
-      if (wt.map) housingProps.map = wt.map;
-      if (wt.normalMap) { housingProps.normalMap = wt.normalMap; housingProps.normalScale = new THREE.Vector2(0.5, 0.5); }
-    }
-    const housingMat = new THREE.MeshStandardMaterial(housingProps);
+    const housingMat = new THREE.MeshStandardMaterial({
+      color: MARBLE_COLOR, roughness: 0.3, metalness: 0.1
+    });
     const housing = new THREE.Mesh(housingGeo, housingMat);
     housing.position.set(consoleX, consoleBaseY + 1.5, consoleZ);
     housing.castShadow = true;
@@ -301,9 +315,9 @@ export class PipeOrgan {
     // Pedalboard (at floor level)
     const pedalGeo = new THREE.BoxGeometry(2.0, 0.08, 0.8);
     const pedalMat = new THREE.MeshStandardMaterial({
-      color: OAK_COLOR,
-      roughness: 0.8,
-      metalness: 0.0,
+      color: MARBLE_COLOR,
+      roughness: 0.3,
+      metalness: 0.1,
     });
     const pedals = new THREE.Mesh(pedalGeo, pedalMat);
     pedals.position.set(consoleX, this.baseY + 0.04, consoleZ - 0.6);
@@ -327,12 +341,23 @@ export class PipeOrgan {
   //  DECORATIONS  - gothic tracery accents, gold trim
   // ------------------------------------------------------------------
   createDecorations() {
-    // Gold arches and pilasters REMOVED — were visible behind LED screens
-
-    // Small point light inside the organ to cast warm interior glow
-    const organInnerLight = new THREE.PointLight(0x442200, 0.1, 8);
-    organInnerLight.position.set(this.organX, this.baseY + 8, this.organZ - 0.5);
-    this.group.add(organInnerLight);
+    // Soft white par cans illuminating the organ facade from below
+    // Positioned in front of the organ, angled up to wash the marble and pipes
+    const parPositions = [
+      [-5, this.baseY + 0.3, this.organZ - 2],
+      [-2.5, this.baseY + 0.3, this.organZ - 2],
+      [0, this.baseY + 0.3, this.organZ - 2],
+      [2.5, this.baseY + 0.3, this.organZ - 2],
+      [5, this.baseY + 0.3, this.organZ - 2],
+    ];
+    for (const [px, py, pz] of parPositions) {
+      const par = new THREE.SpotLight(0xfff8ee, 1.2, 30, Math.PI / 5, 0.6, 0.5);
+      par.position.set(px, py, pz);
+      par.target.position.set(px, this.baseY + 15, this.organZ);
+      par.castShadow = false;
+      this.group.add(par);
+      this.group.add(par.target);
+    }
   }
 
   // ------------------------------------------------------------------

@@ -1033,9 +1033,9 @@ export class Cathedral {
 
   createAltarPlatform() {
     const platformMat = new THREE.MeshStandardMaterial({
-      color: 0x0f0f1a,
-      roughness: 0.35,
-      metalness: 0.25,
+      color: 0xc8bfb4,    // warm cream marble (matches cathedral floor and organ case)
+      roughness: 0.2,
+      metalness: 0.1,
     });
 
     const stageHeight = 1.5;
@@ -1221,8 +1221,8 @@ export class Cathedral {
     this.group.add(altarSpot);
     this.group.add(altarSpot.target);
 
-    // Purple organ wall accent — further reduced
-    const organLight = new THREE.SpotLight(0x8B00FF, 0.2, 35, Math.PI / 4, 0.3, 1);
+    // Soft warm white organ accent — highlights marble and pipes
+    const organLight = new THREE.SpotLight(0xfff4e6, 0.4, 35, Math.PI / 4, 0.5, 0.5);
     organLight.position.set(0, 2, this.naveLength / 2 - 15);
     organLight.target.position.set(0, 15, this.naveLength / 2 - 1);
     this.group.add(organLight);

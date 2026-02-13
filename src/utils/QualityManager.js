@@ -108,8 +108,8 @@ const QUALITY_CONFIGS = {
     ledUpdateInterval: 1,              // update every frame for smooth video playback
     fixtureScreens: false,             // no mini-screens on fixture heads
     beamCoreEnabled: false,            // skip inner beam cores
-    beamConesEnabled: false,           // skip ALL beam cones (saves 16+ additive-blend draw calls)
-    stageFixtureModels: false,         // skip visual fixture models on trusses
+    beamConesEnabled: true,            // beam cones visible (only 4 fixtures on Quest 3)
+    stageFixtureModels: true,          // enable so beam cones are created (only 4 fixtures)
     fogMachines: false,
 
     // Sound System
