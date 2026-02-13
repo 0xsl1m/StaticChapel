@@ -157,15 +157,15 @@ export class DJBooth {
       this.ledPanels.push({ canvas, ctx, texture, mesh, sliceStart, sliceFrac });
     };
 
-    // Left side panel — gets the leftmost slice of the video
+    // Left side panel — faces -X (outward, away from booth center)
     createLEDPanel(
       sideW, panelH,
       -BOOTH_W / 2 - 0.01, panelY, BOOTH_CENTER_Z,
-      Math.PI / 2,
+      -Math.PI / 2,
       0, leftFrac
     );
 
-    // Front panel — gets the center slice
+    // Front panel — faces -Z (toward audience)
     createLEDPanel(
       frontW, panelH,
       0, panelY, BOOTH_CENTER_Z - BOOTH_D / 2 - 0.01,
@@ -173,11 +173,11 @@ export class DJBooth {
       leftFrac, frontFrac
     );
 
-    // Right side panel — gets the rightmost slice
+    // Right side panel — faces +X (outward, away from booth center)
     createLEDPanel(
       sideW, panelH,
       BOOTH_W / 2 + 0.01, panelY, BOOTH_CENTER_Z,
-      -Math.PI / 2,
+      Math.PI / 2,
       leftFrac + frontFrac, leftFrac
     );
 
