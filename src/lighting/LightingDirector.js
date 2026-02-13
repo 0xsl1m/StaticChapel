@@ -90,9 +90,11 @@ const MOOD_TO_PROGRAM = {
 export class LightingDirector {
   /**
    * @param {THREE.Scene} scene
+   * @param {Object} [qualityConfig] - adaptive quality settings
    */
-  constructor(scene) {
+  constructor(scene, qualityConfig = {}) {
     this.scene = scene;
+    this.Q = qualityConfig;
 
     // ---- Fixture storage ----
     this.frontTrussSpots = [];   // 8 moving head spots on front truss
@@ -129,32 +131,37 @@ export class LightingDirector {
   // =========================================================================
 
   _createFixtures() {
-    // --- 8 front truss moving head spots ---
-    // y=20, z=19, x spread from -6 to +6, wider angle + longer distance
-    for (let i = 0; i < 8; i++) {
-      const x = -6 + (12 / 7) * i;
+    const frontCount = this.Q.frontTrussSpots || 8;
+    const sideTotal = this.Q.sideTrussSpots || 8;
+    const parCount = this.Q.parWashes || 8;
+    const laserCount = this.Q.laserSpots || 4;
+    const strobeCount = this.Q.strobes || 6;
+    const sidePerSide = Math.floor(sideTotal / 2);
+
+    // --- Front truss moving head spots ---
+    for (let i = 0; i < frontCount; i++) {
+      const x = -6 + (12 / Math.max(1, frontCount - 1)) * i;
       const spot = this._createSpot(x, 20, 19, 0, 0, 0, 1.0, Math.PI / 6, 0.4);
       this.frontTrussSpots.push(spot);
     }
 
-    // --- 4 moving head spots on each side truss (8 total) ---
-    // Left side: x=-9, y=15, z spread from 18 to 26, wider angle
-    for (let i = 0; i < 4; i++) {
-      const z = 18 + (8 / 3) * i;
+    // --- Side truss moving head spots ---
+    // Left side
+    for (let i = 0; i < sidePerSide; i++) {
+      const z = 18 + (8 / Math.max(1, sidePerSide - 1)) * i;
       const spot = this._createSpot(-9, 15, z, 0, 0, 0, 0.8, Math.PI / 5, 0.4);
       this.sideTrussSpots.push(spot);
     }
-    // Right side: x=+9, y=15, z spread from 18 to 26
-    for (let i = 0; i < 4; i++) {
-      const z = 18 + (8 / 3) * i;
+    // Right side
+    for (let i = 0; i < sidePerSide; i++) {
+      const z = 18 + (8 / Math.max(1, sidePerSide - 1)) * i;
       const spot = this._createSpot(9, 15, z, 0, 0, 0, 0.8, Math.PI / 5, 0.4);
       this.sideTrussSpots.push(spot);
     }
 
-    // --- 8 PAR wash point lights on stage floor ---
-    // y=1.6, arranged in a ring around stage center (z~24)
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
+    // --- PAR wash point lights on stage floor ---
+    for (let i = 0; i < parCount; i++) {
+      const angle = (i / parCount) * Math.PI * 2;
       const radius = 5;
       const x = Math.cos(angle) * radius;
       const z = 24 + Math.sin(angle) * radius;
@@ -162,21 +169,22 @@ export class LightingDirector {
       this.parWashes.push(par);
     }
 
-    // --- 4 laser spotlights (floor mounted at stage corners) ---
-    const laserPositions = [
+    // --- Laser spotlights (floor mounted at stage corners) ---
+    const allLaserPositions = [
       [-6, 0.5, 20],
       [6, 0.5, 20],
       [-6, 0.5, 28],
       [6, 0.5, 28],
     ];
-    for (const [lx, ly, lz] of laserPositions) {
+    for (let i = 0; i < Math.min(laserCount, allLaserPositions.length); i++) {
+      const [lx, ly, lz] = allLaserPositions[i];
       const spot = this._createSpot(lx, ly, lz, 0, 25, 24, 1.0, Math.PI / 10, 0.3);
       this.laserSpots.push(spot);
     }
 
-    // --- 6 strobe point lights on front truss ---
-    for (let i = 0; i < 6; i++) {
-      const x = -5 + (10 / 5) * i;
+    // --- Strobe point lights on front truss ---
+    for (let i = 0; i < strobeCount; i++) {
+      const x = strobeCount > 1 ? -5 + (10 / (strobeCount - 1)) * i : 0;
       const strobe = this._createPoint(x, 20, 19, 0.0, 30);
       this.strobes.push(strobe);
     }

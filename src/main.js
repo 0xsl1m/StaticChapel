@@ -148,8 +148,8 @@ async function init() {
 
   updateLoading(55, 'Programming lights...');
 
-  // Phase 4: Lighting Engine
-  lightingDirector = new LightingDirector(scene);
+  // Phase 4: Lighting Engine — pass quality config for fixture count reduction
+  lightingDirector = new LightingDirector(scene, Q);
 
   // Connect stage fixtures to lighting engine for visual sync
   stage.setLightingDirector(lightingDirector);
@@ -195,8 +195,10 @@ async function init() {
 
   updateLoading(90, 'Checking VR support...');
 
-  // WebXR
-  xrManager = new XRManager(renderer);
+  // WebXR — pass camera so XRManager can create a camera rig
+  xrManager = new XRManager(renderer, camera);
+  // Add the camera rig to the scene (camera is now a child of the rig)
+  scene.add(xrManager.cameraRig);
 
   // Handle resize
   window.addEventListener('resize', onResize);
@@ -287,8 +289,13 @@ function animate() {
   elapsedTime += delta;
   frameCount++;
 
-  // Update controls
-  controls.update(delta);
+  // Update controls — skip desktop controls when in VR
+  const inVR = xrManager && xrManager.isPresenting;
+  if (inVR) {
+    xrManager.update(delta);
+  } else {
+    controls.update(delta);
+  }
 
   // Update audio analysis
   audioEngine.update();
@@ -322,8 +329,10 @@ function animate() {
   // Update DJ booth (head bobbing, animations)
   djBooth.update(elapsedTime, isBeat, energy);
 
-  // Update lighting director (selects program, animates fixtures)
-  lightingDirector.update(elapsedTime, delta, mood, bandValues, energy, isBeat);
+  // Update lighting director (selects program, animates fixtures) — throttled on low tier
+  if (frameCount % (Q.lightingUpdateEvery || 1) === 0) {
+    lightingDirector.update(elapsedTime, delta, mood, bandValues, energy, isBeat);
+  }
 
   // Update VFX
   if (settings.candles && (frameCount % Q.candleUpdateEvery === 0)) {
@@ -348,11 +357,13 @@ function animate() {
     playlist.next();
   }
 
-  // Render main scene first
+  // Render main scene
   renderer.render(scene, camera);
 
-  // Post-processing (vignette overlay) renders on top of the main scene
-  postProcessing.update(elapsedTime, energy, isBeat);
+  // Post-processing (vignette overlay) — skip in VR (separate render pass breaks XR)
+  if (!inVR) {
+    postProcessing.update(elapsedTime, energy, isBeat);
+  }
 }
 
 // --- Resize ---

@@ -103,7 +103,7 @@ const QUALITY_CONFIGS = {
     pipeUpdateFrequency: 4,            // update every 4th frame
 
     // Stage / LED
-    ledPanelCount: 3,                  // center + 2 wings only (skip outer wings)
+    ledPanelCount: 1,                  // center panel only (single screen for Quest 3)
     ledCanvasRes: 64,                  // 64x64 instead of 128
     ledUpdateInterval: 3,              // update every 3rd frame
     fixtureScreens: false,             // no mini-screens on fixture heads
@@ -140,8 +140,9 @@ const QUALITY_CONFIGS = {
     candleLights: false,               // skip PointLights, keep flame visuals only
 
     // VFX
-    fogParticles: 150,
+    fogParticles: 60,                  // reduced from 150 for Quest 3 72fps target
     godRays: true,                     // keep — they're cheap geometry
+    godRayCount: 8,                    // reduced from 16
     dustMotes: false,
 
     // DJ Booth
@@ -149,17 +150,23 @@ const QUALITY_CONFIGS = {
     djAvatarDetail: 'simple',
 
     // Lighting
-    maxLights: 30,                     // hard cap
+    maxLights: 20,                     // hard cap — reduced from 30
     stainedGlassLights: false,         // save 16 PointLights
     naveFillLights: 2,                 // reduced from 5
-    ambientIntensity: 0.5,             // bump ambient to compensate for fewer lights
-    hemisphereIntensity: 0.4,
+    ambientIntensity: 0.6,             // bump ambient to compensate for fewer lights
+    hemisphereIntensity: 0.5,
+    frontTrussSpots: 4,                // reduced from 8
+    sideTrussSpots: 4,                 // reduced from 8 (2 per side)
+    parWashes: 4,                      // reduced from 8
+    laserSpots: 2,                     // reduced from 4
+    strobes: 2,                        // reduced from 6
 
     // Update throttling
     organUpdateEvery: 4,
-    soundSystemUpdateEvery: 3,
-    clubDecorUpdateEvery: 3,
+    soundSystemUpdateEvery: 4,         // increased from 3
+    clubDecorUpdateEvery: 4,           // increased from 3
     candleUpdateEvery: 4,
+    lightingUpdateEvery: 2,            // update lighting programs every other frame
   },
 
   // -----------------------------------------------------------------
