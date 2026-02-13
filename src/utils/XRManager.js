@@ -156,38 +156,46 @@ export class XRManager {
     // Decrease snap turn cooldown
     if (this.snapCooldown > 0) this.snapCooldown -= delta;
 
-    let moveX = 0, moveY = 0;   // left stick (raw)
-    let lookX = 0;               // right stick horizontal (snap turn)
+    let moveX = 0, moveY = 0;   // combined stick movement
+    let snapX = 0;               // right stick horizontal for snap turn
 
     // Read input from XR controllers
+    // Both sticks can move. Right stick horizontal also does snap turn.
     for (const source of session.inputSources) {
       if (!source.gamepad) continue;
       const gp = source.gamepad;
 
       // Standard XR gamepad: axes[2]=thumbstick X, axes[3]=thumbstick Y
-      // Some controllers use axes[0] and axes[1] for the primary thumbstick
+      // Some controllers use axes[0] and axes[1]
       const axisX = gp.axes.length >= 4 ? gp.axes[2] : gp.axes[0];
       const axisY = gp.axes.length >= 4 ? gp.axes[3] : gp.axes[1];
 
       if (source.handedness === 'left') {
-        // Left stick = movement
-        if (Math.abs(axisX) > this.deadzone) moveX = axisX;
-        if (Math.abs(axisY) > this.deadzone) moveY = axisY;
+        // Left stick = movement only
+        if (Math.abs(axisX) > this.deadzone) moveX += axisX;
+        if (Math.abs(axisY) > this.deadzone) moveY += axisY;
       } else if (source.handedness === 'right') {
-        // Right stick = snap turn
-        if (Math.abs(axisX) > this.deadzone) lookX = axisX;
+        // Right stick = movement + snap turn on horizontal axis
+        if (Math.abs(axisY) > this.deadzone) moveY += axisY;
+        if (Math.abs(axisX) > this.deadzone) {
+          snapX = axisX;
+          moveX += axisX;
+        }
       }
     }
 
-    // --- Snap turn (right stick) ---
-    // Push right (positive X) = turn right = decrease rotation.y
-    if (Math.abs(lookX) > this.snapThreshold && this.snapCooldown <= 0) {
-      const snapDir = lookX > 0 ? -1 : 1;
+    // Clamp combined input to -1..1
+    moveX = Math.max(-1, Math.min(1, moveX));
+    moveY = Math.max(-1, Math.min(1, moveY));
+
+    // --- Snap turn (right stick horizontal) ---
+    if (Math.abs(snapX) > this.snapThreshold && this.snapCooldown <= 0) {
+      const snapDir = snapX > 0 ? -1 : 1;
       this.cameraRig.rotation.y += snapDir * this.snapAngle;
-      this.snapCooldown = 0.3; // 300ms cooldown between snaps
+      this.snapCooldown = 0.3;
     }
 
-    // --- Smooth locomotion with acceleration/deceleration (left stick) ---
+    // --- Smooth locomotion (either stick) ---
 
     // Calculate raw stick magnitude (0-1) with deadzone remapping
     const rawMag = Math.sqrt(moveX * moveX + moveY * moveY);
@@ -198,31 +206,21 @@ export class XRManager {
     // Apply power curve for finer low-speed control
     const curvedMagnitude = Math.pow(stickMagnitude, this.stickCurve);
 
-    // Target speed based on curved stick deflection
+    // Target speed
     const targetSpeed = curvedMagnitude * this.maxSpeed;
 
     // Smoothly interpolate current speed toward target
     if (targetSpeed > this.currentSpeed) {
-      // Accelerating
-      this.currentSpeed = Math.min(
-        targetSpeed,
-        this.currentSpeed + this.acceleration * delta
-      );
+      this.currentSpeed = Math.min(targetSpeed, this.currentSpeed + this.acceleration * delta);
     } else {
-      // Decelerating
-      this.currentSpeed = Math.max(
-        targetSpeed,
-        this.currentSpeed - this.deceleration * delta
-      );
+      this.currentSpeed = Math.max(targetSpeed, this.currentSpeed - this.deceleration * delta);
     }
 
-    // Kill tiny residual speed to prevent drift
-    if (this.currentSpeed < 0.01) {
-      this.currentSpeed = 0;
-    }
+    // Kill tiny residual speed
+    if (this.currentSpeed < 0.01) this.currentSpeed = 0;
 
     if (this.currentSpeed > 0 && stickMagnitude > 0) {
-      // Get camera's forward direction in world space (flattened to XZ)
+      // Camera forward in world XZ
       const xrCamera = this.renderer.xr.getCamera();
       xrCamera.getWorldDirection(this._forward);
       this._forward.y = 0;
@@ -231,37 +229,31 @@ export class XRManager {
       // Right vector
       this._right.crossVectors(this._forward, THREE.Object3D.DEFAULT_UP).normalize();
 
-      // Build normalized movement direction from stick input
-      // WebXR gamepad: axes[3] negative = push forward, positive = pull back
-      // getWorldDirection() returns camera facing direction in world space
-      // We want push-forward to move in the direction the user is looking
+      // Build movement direction from stick input
+      // WebXR axes[3]: negative = push forward, positive = pull back
+      // So negate moveY to make push-forward = move forward
       this._targetMoveDir.set(0, 0, 0);
-      this._targetMoveDir.addScaledVector(this._right, -moveX);
-      this._targetMoveDir.addScaledVector(this._forward, moveY);
+      this._targetMoveDir.addScaledVector(this._right, moveX);
+      this._targetMoveDir.addScaledVector(this._forward, -moveY);
       this._targetMoveDir.normalize();
 
-      // Smoothly blend movement direction (prevents jarring direction changes)
-      const dirBlend = 1.0 - Math.pow(0.001, delta); // ~exponential smoothing
+      // Smooth direction blending
+      const dirBlend = 1.0 - Math.pow(0.001, delta);
       this._currentMoveDir.lerp(this._targetMoveDir, dirBlend);
       this._currentMoveDir.normalize();
 
-      // Apply speed and delta to get final displacement
-      this._moveDir.copy(this._currentMoveDir);
-      this._moveDir.multiplyScalar(this.currentSpeed * delta);
-
-      // Move the rig
+      // Apply displacement
+      this._moveDir.copy(this._currentMoveDir).multiplyScalar(this.currentSpeed * delta);
       this.cameraRig.position.add(this._moveDir);
 
       // Clamp to bounds
       this.cameraRig.position.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, this.cameraRig.position.x));
       this.cameraRig.position.z = Math.max(this.bounds.minZ, Math.min(this.bounds.maxZ, this.cameraRig.position.z));
     } else if (this.currentSpeed > 0) {
-      // Stick released but still decelerating — continue in last direction
-      this._moveDir.copy(this._currentMoveDir);
-      this._moveDir.multiplyScalar(this.currentSpeed * delta);
+      // Decelerating coast
+      this._moveDir.copy(this._currentMoveDir).multiplyScalar(this.currentSpeed * delta);
       this.cameraRig.position.add(this._moveDir);
 
-      // Clamp
       this.cameraRig.position.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, this.cameraRig.position.x));
       this.cameraRig.position.z = Math.max(this.bounds.minZ, Math.min(this.bounds.maxZ, this.cameraRig.position.z));
     }
