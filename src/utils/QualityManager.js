@@ -148,7 +148,7 @@ const QUALITY_CONFIGS = {
     dustMotes: false,
 
     // DJ Booth
-    djScreenUpdates: false,            // static screens
+    djScreenUpdates: true,             // needed for LED facade video
     djAvatarDetail: 'simple',
 
     // Lighting — MINIMAL for Quest 3 stability
