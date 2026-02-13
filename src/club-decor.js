@@ -238,61 +238,49 @@ export class ClubDecor {
     // ======== BACK BAR WALL — very dark oak paneling with grain texture ========
     const backWallH = 4.5;
     const backWallMat = (() => {
-      // Procedural dark walnut grain texture — rich warm brown, not grey
+      // Procedural dark oak grain texture
       const res = 256;
       const c = document.createElement('canvas');
       c.width = res; c.height = res;
       const ctx = c.getContext('2d');
-      // Dark walnut base — warm brown, not near-black
-      ctx.fillStyle = '#1e0f08';
+      // Very dark oak base
+      ctx.fillStyle = '#0a0604';
       ctx.fillRect(0, 0, res, res);
-      // Horizontal grain lines with strong color variation
+      // Horizontal grain lines
       for (let y = 0; y < res; y++) {
-        const grain = Math.sin(y * 0.2) * 0.35 +
-                      Math.sin(y * 0.55 + 1.5) * 0.25 +
-                      Math.sin(y * 1.1 + 3.0) * 0.15 +
-                      Math.sin(y * 2.7 + 0.8) * 0.08;
+        const grain = Math.sin(y * 0.25) * 0.3 +
+                      Math.sin(y * 0.6 + 1.5) * 0.2 +
+                      Math.sin(y * 1.3 + 3.0) * 0.1;
         const v = grain * 0.5 + 0.5;
-        // Warm brown channel ratios: r > g >> b
-        const r = Math.floor(35 + v * 30);
-        const g = Math.floor(18 + v * 16);
-        const b = Math.floor(8 + v * 8);
-        ctx.fillStyle = `rgba(${r},${g},${b},0.6)`;
+        const r = Math.max(0, 10 + v * 8);
+        const g = Math.max(0, 6 + v * 5);
+        const b = Math.max(0, 4 + v * 3);
+        ctx.fillStyle = `rgba(${r},${g},${b},0.5)`;
         ctx.fillRect(0, y, res, 1);
       }
-      // Darker grain streaks
-      for (let s = 0; s < 8; s++) {
-        const sy = ((s * 31 + 11) % res);
-        ctx.fillStyle = 'rgba(12,5,2,0.4)';
-        ctx.fillRect(0, sy, res, 2);
-      }
-      // Knots — darker brown, not black
+      // Knots
       for (let k = 0; k < 4; k++) {
         const kx = ((k * 67 + 13) % res);
         const ky = ((k * 89 + 37) % res);
-        ctx.fillStyle = 'rgba(10,4,2,0.6)';
+        ctx.fillStyle = 'rgba(4,2,1,0.5)';
         ctx.beginPath();
-        ctx.ellipse(kx, ky, 14, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(kx, ky, 12, 6, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Lighter ring around knot
-        ctx.strokeStyle = 'rgba(50,25,12,0.3)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
       }
       // Fine noise
       const id = ctx.getImageData(0, 0, res, res);
       for (let i = 0; i < id.data.length; i += 4) {
-        const n = (Math.random() - 0.5) * 8;
+        const n = (Math.random() - 0.5) * 6;
         id.data[i] = Math.max(0, Math.min(255, id.data[i] + n));
-        id.data[i + 1] = Math.max(0, Math.min(255, id.data[i + 1] + n * 0.6));
-        id.data[i + 2] = Math.max(0, Math.min(255, id.data[i + 2] + n * 0.3));
+        id.data[i + 1] = Math.max(0, Math.min(255, id.data[i + 1] + n));
+        id.data[i + 2] = Math.max(0, Math.min(255, id.data[i + 2] + n));
       }
       ctx.putImageData(id, 0, 0);
       const tex = new THREE.CanvasTexture(c);
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       tex.repeat.set(3, 2);
       return new THREE.MeshStandardMaterial({
-        map: tex, color: 0x3a1e0e, roughness: 0.72, metalness: 0.02,
+        map: tex, color: 0xffffff, roughness: 0.85, metalness: 0.01,
       });
     })();
     // Sits flush against wall face (z=0 in local space, 0.08m thick)
@@ -307,10 +295,10 @@ export class ClubDecor {
     const alcoveBaseY = barH + 0.15;
     const alcoveZ = 0.1;  // just in front of back panel
 
-    // Warm backlight material for alcove interiors
+    // Alcove interior — dark walnut wood with warm backlight glow
     const alcoveBackMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1208, roughness: 0.7, metalness: 0.0,
-      emissive: 0xffddaa, emissiveIntensity: 0.1,
+      color: 0x0e0804, roughness: 0.75, metalness: 0.02,
+      emissive: 0xffddaa, emissiveIntensity: 0.06,
     });
     const archTrimMat = new THREE.MeshStandardMaterial({
       color: GOLD_WARM, roughness: 0.25, metalness: 0.85,
@@ -337,10 +325,11 @@ export class ClubDecor {
       }
 
       // Moon phase: bright disc + dark overlay disc to carve the shadow
+      // Placed ABOVE the back bar wall, clearly above shelving
       // Symmetrical: center=full, mirror outward
       // L→R: waning crescent, 3rd quarter, waning gibbous, FULL, waxing gibbous, 1st quarter, waxing crescent
       const moonR = alcoveW / 2 - 0.25;
-      const moonY = alcoveBaseY + alcoveH + moonR * 0.5;
+      const moonY = backWallH + 0.6 + moonR;
       const moonZ = alcoveZ + 0.08;
       const moonMat = new THREE.MeshStandardMaterial({
         color: 0xf0e8d0, roughness: 0.3, metalness: 0.6,
@@ -580,7 +569,7 @@ export class ClubDecor {
     bar.add(place(new THREE.Mesh(
       new THREE.PlaneGeometry(4.5, 0.65),
       new THREE.MeshBasicMaterial({ map: signTex, transparent: true, toneMapped: false })
-    ), 0, backWallH + 0.6, 0.1));
+    ), 0, backWallH + 3.5, 0.1));
 
     // ======== WARM LIGHTING ========
     // Shelf backlight (warm amber) — only on non-low tier
@@ -608,7 +597,8 @@ export class ClubDecor {
     // Furniture zone: bar front (~z=-22) to dancefloor edge (z≈-2)
     // Column pairs 0-5 fall in this range
 
-    // Helper: compute rotation.y so local -Z points toward stage center (0, 0, 19)
+    // Helper: compute rotation.y so sofa seat (local -Z) points toward stage
+    // Sofa back is at local +Z, seat faces local -Z
     const STAGE_Z = 19;
     const faceStage = (fx, fz) => {
       const dx = 0 - fx;
@@ -690,48 +680,51 @@ export class ClubDecor {
 
     if (shape === 'L') {
       // L-shaped sectional: long section + short return
+      // Long sofa along X, back at +Z, seat faces -Z (toward stage after rotation)
+      // Return extends from right end toward -Z (stage-side)
       const longW = size;
-      const shortW = size * 0.6;
+      const shortW = size * 0.5;
       const depth = 1.0;
       const h = 0.85;
       // Long section (along X)
       g.add(this._buildSofa(longW, depth, h, upholstery, M));
-      // Short return (along Z, attached to right end)
+      // Short return (along Z, attached to right end, extending toward -Z)
       const returnSofa = this._buildSofa(shortW, depth, h, upholstery, M);
-      returnSofa.rotation.y = -Math.PI / 2;
-      returnSofa.position.set(longW / 2 - depth / 2, 0, -shortW / 2 + depth / 2);
+      returnSofa.rotation.y = Math.PI / 2;
+      returnSofa.position.set(longW / 2 - depth / 2, 0, -(shortW / 2 - depth / 2));
       g.add(returnSofa);
-      // Coffee table in the L's inner corner
-      const ct = this._buildCoffeeTable(1.2, 0.6, M);
-      ct.position.set(longW / 4, 0, -0.8);
+      // Coffee table in the L's inner corner (between long sofa and return)
+      const ct = this._buildCoffeeTable(1.0, 0.6, M);
+      ct.position.set(longW / 4, 0, -(shortW / 2));
       g.add(ct);
-      // End table at far end
+      // End table at far end of long sofa
       const et = this._buildEndTable(M);
       et.position.set(-longW / 2 - 0.3, 0, 0);
       g.add(et);
     } else if (shape === 'U') {
-      // U-shaped: center back + two side returns, opening toward stage (+z)
+      // U-shaped: center back at +Z, returns extend toward -Z (stage-side after rotation)
+      // After faceStage rotation, local -Z faces stage, so opening faces stage
       const centerW = size;
       const returnW = size * 0.4;
       const depth = 1.0;
       const h = 0.85;
-      // Center back section (sofa faces +z toward stage, back at -z)
+      // Center back section — default orientation (back at +Z, seat at -Z)
+      // This is the "back wall" of the U, furthest from stage
       const centerSofa = this._buildSofa(centerW, depth, h, upholstery, M);
-      centerSofa.rotation.y = Math.PI; // flip so sitter faces +z (stage)
       g.add(centerSofa);
-      // Left return (extends toward stage along +z)
+      // Left return (extends toward -Z = toward stage)
       const leftReturn = this._buildSofa(returnW, depth, h, upholstery, M);
-      leftReturn.rotation.y = -Math.PI / 2;
-      leftReturn.position.set(-centerW / 2 + depth / 2, 0, returnW / 2 - depth / 2);
+      leftReturn.rotation.y = Math.PI / 2;
+      leftReturn.position.set(-centerW / 2 + depth / 2, 0, -(returnW / 2 - depth / 2));
       g.add(leftReturn);
       // Right return
       const rightReturn = this._buildSofa(returnW, depth, h, upholstery, M);
-      rightReturn.rotation.y = Math.PI / 2;
-      rightReturn.position.set(centerW / 2 - depth / 2, 0, returnW / 2 - depth / 2);
+      rightReturn.rotation.y = -Math.PI / 2;
+      rightReturn.position.set(centerW / 2 - depth / 2, 0, -(returnW / 2 - depth / 2));
       g.add(rightReturn);
-      // Coffee table in the center of the U
+      // Coffee table in the center of the U (toward -Z / stage side)
       const ct = this._buildCoffeeTable(1.6, 0.8, M);
-      ct.position.set(0, 0, 0.6);
+      ct.position.set(0, 0, -0.6);
       g.add(ct);
     }
 
