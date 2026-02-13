@@ -239,10 +239,10 @@ export class ClubDecor {
     const barH = 1.12;     // standard bar counter height (42-44 inches)
     const barD = 0.9;      // deeper counter
 
-    // ======== BACK BAR WALL — dark walnut paneling against cathedral wall ========
+    // ======== BACK BAR WALL — dark cedar paneling against cathedral wall ========
     const backWallH = 4.5;
     const backWallMat = new THREE.MeshStandardMaterial({
-      color: 0x2a1810, roughness: 0.65, metalness: 0.02,
+      color: 0x1e0d06, roughness: 0.78, metalness: 0.01,
     });
     // Sits flush against wall face (z=0 in local space, 0.08m thick)
     bar.add(place(new THREE.Mesh(
@@ -285,8 +285,9 @@ export class ClubDecor {
         ), pilX, alcoveBaseY + alcoveH + 0.15, alcoveZ + 0.04));
       }
 
-      // Moon phase disc above alcove (7 alcoves = 7 phases)
-      // Phases: new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter
+      // Moon phase disc — symmetrical: center=full, mirror outward
+      // Alcoves 0-6 → phases: waning crescent, third quarter, waning gibbous,
+      //   FULL, waxing gibbous, first quarter, waxing crescent
       const moonR = alcoveW / 2 - 0.25;
       const moonY = alcoveBaseY + alcoveH + moonR * 0.5;
       const moonZ = alcoveZ + 0.08;
@@ -294,45 +295,63 @@ export class ClubDecor {
         color: 0xf0e8d0, roughness: 0.3, metalness: 0.6,
         emissive: 0xf0e8d0, emissiveIntensity: 0.06,
       });
-      const darkMat = new THREE.MeshStandardMaterial({
-        color: 0x0a0a0e, roughness: 0.8, metalness: 0.0,
-      });
-      // Full moon disc (always present as base)
-      const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(moonR, 24), moonMat);
-      moonDisc.position.set(ax, moonY, moonZ);
-      bar.add(moonDisc);
-      // Shadow disc to carve out moon phase
-      // phase 0=new(all dark), 1=wax crescent, 2=first quarter, 3=wax gibbous,
-      // 4=full(no shadow), 5=wane gibbous, 6=last quarter
-      if (a !== 4) { // full moon has no shadow
-        const shadow = new THREE.Mesh(new THREE.CircleGeometry(moonR * 1.02, 24), darkMat);
-        shadow.position.set(ax, moonY, moonZ + 0.005);
-        // Offset shadow disc to create phase shape
-        if (a === 0) {
-          // New moon: shadow covers entire disc
-          shadow.position.z = moonZ + 0.003;
-        } else if (a === 1) {
-          // Waxing crescent: shadow shifted right, small sliver of light on right
-          shadow.position.x = ax + moonR * 0.6;
-        } else if (a === 2) {
-          // First quarter: shadow covers left half
-          shadow.position.x = ax + moonR * 0.45;
-          shadow.scale.x = 0.7;
-        } else if (a === 3) {
-          // Waxing gibbous: small shadow on left
-          shadow.position.x = ax + moonR * 0.3;
-          shadow.scale.x = 0.45;
-        } else if (a === 5) {
-          // Waning gibbous: small shadow on right
-          shadow.position.x = ax - moonR * 0.3;
-          shadow.scale.x = 0.45;
-        } else if (a === 6) {
-          // Last quarter: shadow covers right half
-          shadow.position.x = ax - moonR * 0.45;
-          shadow.scale.x = 0.7;
+
+      // Build moon phase shape. The lit portion is drawn as a closed shape:
+      //   - One semicircular arc on the outer lit edge
+      //   - One elliptical arc for the terminator (shadow boundary)
+      // terminatorX: 1.0=full circle, 0=half, -1.0=new moon (no light)
+      // litSide: +1=right side lit (waxing), -1=left side lit (waning)
+      const buildMoonPhase = (alcoveIdx, r) => {
+        const seg = 32;
+        if (alcoveIdx === 3) return new THREE.CircleGeometry(r, seg); // full
+
+        // Map alcove index to lit-side and terminator width
+        // 0: waning crescent  → left lit,  terminator=-0.45 (thin sliver)
+        // 1: third quarter    → left lit,  terminator= 0    (half moon)
+        // 2: waning gibbous   → left lit,  terminator= 0.55 (mostly lit)
+        // 4: waxing gibbous   → right lit, terminator= 0.55
+        // 5: first quarter    → right lit, terminator= 0
+        // 6: waxing crescent  → right lit, terminator=-0.45
+        const phases = [
+          { lit: -1, t: -0.45 }, // 0: waning crescent
+          { lit: -1, t:  0.0  }, // 1: third quarter
+          { lit: -1, t:  0.55 }, // 2: waning gibbous
+          null,                   // 3: full (handled above)
+          { lit:  1, t:  0.55 }, // 4: waxing gibbous
+          { lit:  1, t:  0.0  }, // 5: first quarter
+          { lit:  1, t: -0.45 }, // 6: waxing crescent
+        ];
+        const p = phases[alcoveIdx];
+        const shape = new THREE.Shape();
+
+        // Outer arc: semicircle on the lit side
+        // lit=+1 (right): arc sweeps from bottom (-PI/2) to top (PI/2)
+        // lit=-1 (left):  arc sweeps from top (PI/2+PI) to bottom (-PI/2+PI) i.e. PI/2 to 3PI/2
+        const startAngle = p.lit > 0 ? -Math.PI / 2 : Math.PI / 2;
+        for (let i = 0; i <= seg; i++) {
+          const angle = startAngle + (Math.PI * i) / seg;
+          const x = Math.cos(angle) * r;
+          const y = Math.sin(angle) * r;
+          if (i === 0) shape.moveTo(x, y);
+          else shape.lineTo(x, y);
         }
-        bar.add(shadow);
-      }
+        // Terminator arc: elliptical, closes back to start
+        // Sweeps in the opposite direction along the shadow boundary
+        // terminatorX = cos(angle) * r * t  (t controls how far the terminator reaches)
+        for (let i = 0; i <= seg; i++) {
+          // Reverse direction from where outer arc ended back to start
+          const angle = startAngle + Math.PI - (Math.PI * i) / seg;
+          const x = Math.cos(angle) * r * p.t;
+          const y = Math.sin(angle) * r;
+          shape.lineTo(x, y);
+        }
+        return new THREE.ShapeGeometry(shape);
+      };
+
+      const moonGeo = buildMoonPhase(a, moonR);
+      const moonMesh = new THREE.Mesh(moonGeo, moonMat);
+      moonMesh.position.set(ax, moonY, moonZ);
+      bar.add(moonMesh);
 
       // Gold arch trim ring
       bar.add(place(new THREE.Mesh(
@@ -534,46 +553,58 @@ export class ClubDecor {
     const colSpacing = NAVE_LENGTH / 13; // ≈4.615m between column pairs
     // Column Z positions: z = -30 + colSpacing * (i+1)
     const colZ = i => -NAVE_LENGTH / 2 + colSpacing * (i + 1);
+    // Stage at z=19. Columns at x=±10, walls at x=±15.6
 
-    // Furniture zone: bar front (~z=-27) to dancefloor edge (z≈-2)
-    // Column pairs 0-4 fall in this range (z ≈ -25.4 to -6.9)
+    // Furniture zone: bar front (~z=-22) to dancefloor edge (z≈-2)
+    // Column pairs 0-5 fall in this range
 
-    // ======== NAVE CENTER — Large sectional groupings between columns ========
-    // These sit in the center of the nave (x ≈ -7 to +7) between column pairs
+    // ======== NAVE CENTER — Fill the space between column rows (x=±10) ========
+    // Push groups closer to columns: x=±6 with 6m wide pieces → edges at x=±3 to ±9
 
-    // --- Bay 0-1 (z ≈ -25 to -21): Near-bar lounge — large L-sectional facing stage ---
-    const bay01z = (colZ(0) + colZ(1)) / 2; // ≈ -23.1
-    this._placeSectionalGroup(0, bay01z, 0, 'velvetNavy', 'L', 5.0, M);
+    // --- Bay 0-1 (z ≈ -23): Near-bar — L-sectionals flanking center path ---
+    const bay01z = (colZ(0) + colZ(1)) / 2;
+    this._placeSectionalGroup(-5.5, bay01z, 0, 'velvetNavy', 'L', 6.0, M);
+    this._placeSectionalGroup(5.5, bay01z, Math.PI, 'velvetEmerald', 'L', 6.0, M);
 
-    // --- Bay 1-2 (z ≈ -21 to -16): Deep lounge — U-sectional with coffee table ---
-    const bay12z = (colZ(1) + colZ(2)) / 2; // ≈ -18.5
-    this._placeSectionalGroup(0, bay12z, 0, 'velvetCrimson', 'U', 5.5, M);
+    // --- Bay 1-2 (z ≈ -18.5): Deep lounge — two U-sectionals side by side ---
+    const bay12z = (colZ(1) + colZ(2)) / 2;
+    this._placeSectionalGroup(-5.0, bay12z, 0, 'velvetCrimson', 'U', 6.0, M);
+    this._placeSectionalGroup( 5.0, bay12z, 0, 'velvetPlum', 'U', 6.0, M);
 
-    // --- Bay 2-3 (z ≈ -16 to -12): Mid lounge — pair of facing sofas ---
-    const bay23z = (colZ(2) + colZ(3)) / 2; // ≈ -13.8
-    this._placeFacingSofas(0, bay23z, 'velvetEmerald', M);
+    // --- Bay 2-3 (z ≈ -13.8): Mid lounge — facing sofas pushed wide ---
+    const bay23z = (colZ(2) + colZ(3)) / 2;
+    this._placeFacingSofas(-5.5, bay23z, 'velvetEmerald', M);
+    this._placeFacingSofas( 5.5, bay23z, 'velvetPlum', M);
 
-    // --- Bay 3-4 (z ≈ -12 to -7): Transition — scattered chairs + end tables ---
-    const bay34z = (colZ(3) + colZ(4)) / 2; // ≈ -9.2
-    this._placeChairCluster(0, bay34z, 'velvetPlum', M);
+    // --- Bay 3-4 (z ≈ -9.2): Transition — chair clusters near columns ---
+    const bay34z = (colZ(3) + colZ(4)) / 2;
+    this._placeChairCluster(-5.5, bay34z, 'velvetPlum', M);
+    this._placeChairCluster( 5.5, bay34z, 'velvetNavy', M);
 
     // ======== SIDE AISLES — Intimate seating against outer walls ========
-    // Side aisle: x = ±10 to ±16, furniture at x ≈ ±13 (centered in aisle)
-    // Each bay between column pairs gets a small seating group
+    // Side aisle: between columns (x=±10) and walls (x=±15.6)
+    // Furniture at x=±13.5 (backs near outer wall), all angled TOWARD stage
+    //
+    // Sofa geometry: back cushion at local +Z, sitter faces local -Z
+    // rotation.y is CCW from above in Three.js:
+    //   Left side (x=-13.5): POSITIVE rot → local +Z (back) rotates toward -X (outer wall)
+    //     → sitter faces +X/+Z (toward nave center + stage) ✓
+    //   Right side (x=+13.5): NEGATIVE rot → local +Z (back) rotates toward +X (outer wall)
+    //     → sitter faces -X/+Z (toward nave center + stage) ✓
 
     const sideGroups = [
-      // Left side aisle
-      { x: -13, z: colZ(0), rot: 0.15 * Math.PI,  style: 'sofa',  color: 'velvetCrimson' },
-      { x: -13, z: colZ(1), rot: 0.2 * Math.PI,   style: 'chair', color: 'cognac' },
-      { x: -13, z: colZ(2), rot: 0.25 * Math.PI,  style: 'sofa',  color: 'velvetPlum' },
-      { x: -13, z: colZ(3), rot: 0.3 * Math.PI,   style: 'chair', color: 'oxblood' },
-      { x: -13, z: colZ(4), rot: 0.2 * Math.PI,   style: 'sofa',  color: 'velvetNavy' },
-      // Right side aisle
-      { x: 13, z: colZ(0), rot: -0.15 * Math.PI, style: 'sofa',  color: 'velvetEmerald' },
-      { x: 13, z: colZ(1), rot: -0.2 * Math.PI,  style: 'chair', color: 'oxblood' },
-      { x: 13, z: colZ(2), rot: -0.25 * Math.PI, style: 'sofa',  color: 'velvetCrimson' },
-      { x: 13, z: colZ(3), rot: -0.3 * Math.PI,  style: 'chair', color: 'cognac' },
-      { x: 13, z: colZ(4), rot: -0.2 * Math.PI,  style: 'sofa',  color: 'velvetPlum' },
+      // Left side aisle — POSITIVE rotations (back toward left wall, face toward stage)
+      { x: -13.5, z: colZ(0), rot:  0.40 * Math.PI, style: 'sofa',  color: 'velvetCrimson' },
+      { x: -13.5, z: colZ(1), rot:  0.35 * Math.PI, style: 'chair', color: 'cognac' },
+      { x: -13.5, z: colZ(2), rot:  0.32 * Math.PI, style: 'sofa',  color: 'velvetPlum' },
+      { x: -13.5, z: colZ(3), rot:  0.28 * Math.PI, style: 'chair', color: 'oxblood' },
+      { x: -13.5, z: colZ(4), rot:  0.25 * Math.PI, style: 'sofa',  color: 'velvetNavy' },
+      // Right side aisle — NEGATIVE rotations (back toward right wall, face toward stage)
+      { x: 13.5, z: colZ(0), rot: -0.40 * Math.PI, style: 'sofa',  color: 'velvetEmerald' },
+      { x: 13.5, z: colZ(1), rot: -0.35 * Math.PI, style: 'chair', color: 'oxblood' },
+      { x: 13.5, z: colZ(2), rot: -0.32 * Math.PI, style: 'sofa',  color: 'velvetCrimson' },
+      { x: 13.5, z: colZ(3), rot: -0.28 * Math.PI, style: 'chair', color: 'cognac' },
+      { x: 13.5, z: colZ(4), rot: -0.25 * Math.PI, style: 'sofa',  color: 'velvetPlum' },
     ];
 
     sideGroups.forEach(sg => {
@@ -629,26 +660,28 @@ export class ClubDecor {
       et.position.set(-longW / 2 - 0.4, 0, 0);
       g.add(et);
     } else if (shape === 'U') {
-      // U-shaped: center + two returns
+      // U-shaped: center back + two side returns, opening toward stage (+z)
       const centerW = size;
-      const returnW = size * 0.5;
+      const returnW = size * 0.4;
       const depth = 1.1;
       const h = 0.85;
-      // Center section
-      g.add(this._buildSofa(centerW, depth, h, upholstery, M));
-      // Left return
+      // Center back section (sofa faces +z toward stage, back at -z)
+      const centerSofa = this._buildSofa(centerW, depth, h, upholstery, M);
+      centerSofa.rotation.y = Math.PI; // flip so sitter faces +z (stage)
+      g.add(centerSofa);
+      // Left return (extends toward stage along +z)
       const leftReturn = this._buildSofa(returnW, depth, h, upholstery, M);
-      leftReturn.rotation.y = Math.PI / 2;
-      leftReturn.position.set(-centerW / 2 + depth / 2, 0, -returnW / 2 + depth / 2);
+      leftReturn.rotation.y = -Math.PI / 2;
+      leftReturn.position.set(-centerW / 2 + depth / 2, 0, returnW / 2 - depth / 2);
       g.add(leftReturn);
       // Right return
       const rightReturn = this._buildSofa(returnW, depth, h, upholstery, M);
-      rightReturn.rotation.y = -Math.PI / 2;
-      rightReturn.position.set(centerW / 2 - depth / 2, 0, -returnW / 2 + depth / 2);
+      rightReturn.rotation.y = Math.PI / 2;
+      rightReturn.position.set(centerW / 2 - depth / 2, 0, returnW / 2 - depth / 2);
       g.add(rightReturn);
       // Large coffee table in the center of the U
-      const ct = this._buildCoffeeTable(1.8, 0.9, M);
-      ct.position.set(0, 0, -1.3);
+      const ct = this._buildCoffeeTable(2.2, 1.0, M);
+      ct.position.set(0, 0, 0.8);
       g.add(ct);
     }
 
@@ -931,48 +964,121 @@ export class ClubDecor {
   createPillarGlows() {
     const spacing = NAVE_LENGTH / 13;
     const pillarH = 28;
-    // More height segments so the UV-based sweep looks smooth
-    const glowGeo = new THREE.CylinderGeometry(0.65, 0.65, pillarH, 8, 32, true);
+    // High res for noise-based tendril patterns
+    const glowGeo = new THREE.CylinderGeometry(0.68, 0.68, pillarH, 16, 48, true);
 
-    // ShaderMaterial: electricity sweeps top→bottom via uWaveFront uniform
+    // Arc strikes at y=20 → normalized = 8/28 ≈ 0.286 (0=top, 1=bottom)
+    const STRIKE_NORM = 8.0 / 28.0;
+
+    // Realistic electricity shader: instant illumination with crackling tendrils,
+    // NOT a sweeping wavefront. Real electricity through a conductor is near-instant.
     const makeGlowMat = () => new THREE.ShaderMaterial({
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
       uniforms: {
-        uWaveFront: { value: -1.0 },  // -1 = off, 0 = top, 1 = bottom (grounded)
-        uIntensity: { value: 0.0 },
-        uColor: { value: new THREE.Color(0x6688ff) },
+        uIntensity:   { value: 0.0 },   // overall brightness (0=off, 1=full)
+        uStrikePoint: { value: STRIKE_NORM },
+        uTime:        { value: 0.0 },
+        uColor:       { value: new THREE.Color(0x5577ff) },
+        uFlicker:     { value: 0.0 },    // rapid random flicker seed (changes per frame)
       },
       vertexShader: `
-        varying float vHeight;
+        varying float vH;  // 0=top, 1=bottom
+        varying float vA;  // angle around pillar (0..1)
+        varying vec3 vPos;
         void main() {
-          // UV.y: 0 at bottom of cylinder, 1 at top
-          vHeight = 1.0 - uv.y; // invert so 0=top, 1=bottom
+          vH = 1.0 - uv.y;
+          vA = uv.x;
+          vPos = position;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
-        uniform float uWaveFront;
         uniform float uIntensity;
+        uniform float uStrikePoint;
+        uniform float uTime;
         uniform vec3 uColor;
-        varying float vHeight;
+        uniform float uFlicker;
+        varying float vH;
+        varying float vA;
+        varying vec3 vPos;
+
+        // 2D hash for tendril patterns
+        float hash21(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+        // Value noise 2D
+        float noise2D(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = hash21(i);
+          float b = hash21(i + vec2(1.0, 0.0));
+          float c = hash21(i + vec2(0.0, 1.0));
+          float d = hash21(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        // Fractal noise (2 octaves for speed)
+        float fbm(vec2 p) {
+          float v = 0.0;
+          v += noise2D(p) * 0.6;
+          v += noise2D(p * 2.3 + 1.7) * 0.4;
+          return v;
+        }
+
         void main() {
-          if (uIntensity <= 0.0 || uWaveFront < -0.5) discard;
-          // Bright leading edge at wavefront, fading trail above
-          float dist = vHeight - uWaveFront;
-          // Leading edge: sharp bright band (width ~0.08 of pillar height)
-          float edge = exp(-dist * dist * 600.0);
-          // Trail above wavefront: fades out behind the sweep
-          float trail = dist < 0.0 ? exp(dist * 8.0) : 0.0;
-          // Ground flash: when wavefront near bottom, brief bright base
-          float groundFlash = uWaveFront > 0.85 ? exp(-(1.0 - vHeight) * (1.0 - vHeight) * 200.0) * (uWaveFront - 0.85) * 6.667 : 0.0;
-          float alpha = (edge * 1.0 + trail * 0.4 + groundFlash * 0.8) * uIntensity;
-          if (alpha < 0.005) discard;
-          // Brighter white at leading edge, base color in trail
-          vec3 col = mix(uColor, vec3(0.85, 0.92, 1.0), edge * 0.7);
-          gl_FragColor = vec4(col, min(alpha, 0.5));
+          if (uIntensity <= 0.001) discard;
+
+          // Distance from strike point (normalized). Electricity is brightest
+          // at strike and fades toward extremities.
+          float distFromStrike = abs(vH - uStrikePoint);
+          // Below strike: electricity grounds (brighter, further reach)
+          // Above strike: brief upward glow (dimmer, limited)
+          float isBelow = step(uStrikePoint, vH);
+          float reach = isBelow
+            ? smoothstep(1.0, uStrikePoint, vH) // ground reach: full pillar below strike
+            : smoothstep(0.15, 0.0, distFromStrike); // upward: only ~15% of pillar height
+
+          // === BRANCHING TENDRILS ===
+          // Noise pattern that looks like forking electrical discharges
+          // scrolls with time and flickers randomly per frame
+          vec2 tendrilUV = vec2(vA * 6.0, vH * 12.0); // tile around and along pillar
+          float tendril = fbm(tendrilUV + vec2(uFlicker * 3.0, uTime * 8.0));
+          // Threshold to create distinct bright channels
+          float channels = smoothstep(0.35, 0.65, tendril);
+          // Add finer branches
+          float fine = fbm(tendrilUV * 3.0 + vec2(uFlicker * 7.0, -uTime * 15.0));
+          float fineBranch = smoothstep(0.45, 0.7, fine) * 0.5;
+          float pattern = channels + fineBranch;
+
+          // === CORE BRIGHTNESS at strike point ===
+          float strikeGlow = exp(-distFromStrike * distFromStrike * 80.0);
+
+          // === GROUND FLASH (base of pillar) ===
+          float groundGlow = exp(-(1.0 - vH) * (1.0 - vH) * 60.0) * isBelow;
+
+          // === COMBINE ===
+          // Random per-frame crackle (simulates rapid discharge fluctuation)
+          float crackle = 0.5 + 0.5 * hash21(vec2(uFlicker, vH * 10.0 + vA * 5.0));
+
+          float brightness = (
+            pattern * reach * crackle * 0.6     // tendril network
+            + strikeGlow * 0.8                   // hot spot at strike
+            + groundGlow * 0.3                   // ground termination
+            + reach * 0.1                        // base ambient along path
+          ) * uIntensity;
+
+          if (brightness < 0.005) discard;
+
+          // Color: white-hot at high brightness, blue-purple at edges
+          vec3 hotWhite = vec3(0.92, 0.95, 1.0);
+          vec3 col = mix(uColor, hotWhite, smoothstep(0.15, 0.6, brightness));
+
+          gl_FragColor = vec4(col, min(brightness, 0.65));
         }
       `,
     });
@@ -987,7 +1093,6 @@ export class ClubDecor {
       this.group.add(rightGlow);
       this.pillarGlows.push({
         left: leftGlow, right: rightGlow,
-        leftWave: -1, rightWave: -1,       // wavefront position (-1=off, 0=top, 1=bottom)
         leftIntensity: 0, rightIntensity: 0,
         index: i,
       });
@@ -1098,9 +1203,13 @@ export class ClubDecor {
     if (!bandValues) bandValues = {};
     if (energy === undefined) energy = 0;
 
+    // Delta time for frame-independent animation
+    const dt = time - (this._lastTime || time);
+    this._lastTime = time;
+
     this._updateChandeliers(time, energy, isBeat);
     this._updateArcs(time, energy, isBeat, bandValues);
-    this._updatePillarGlows();
+    this._updatePillarGlows(dt, time);
     this._updateParticles(time, energy, isBeat);
     this._updateBarGlow(time, energy);
   }
@@ -1129,33 +1238,27 @@ export class ClubDecor {
     });
   }
 
-  _updatePillarGlows() {
-    // Sweep speed: wavefront travels top→bottom in ~250ms (4.0/sec)
-    const SWEEP_SPEED = 4.0 * 0.016; // per frame at 60fps
-    const FADE_RATE = 0.08;           // fast intensity decay after grounding
+  _updatePillarGlows(dt, time) {
+    // Electricity on a conductor is near-instant. No sweep — just intensity + decay.
+    // Fast decay: glow fades in ~120ms after arc stops feeding it.
+    const DECAY_RATE = 8.0; // per-sec
+    const safeDt = Math.min(dt, 0.05);
 
     this.pillarGlows.forEach(pg => {
-      // --- Left pillar ---
-      if (pg.leftWave >= 0 && pg.leftWave < 1.0) {
-        // Actively sweeping down
-        pg.leftWave = Math.min(1.0, pg.leftWave + SWEEP_SPEED);
-      } else if (pg.leftWave >= 1.0) {
-        // Grounded — rapid fade
-        pg.leftIntensity = Math.max(0, pg.leftIntensity - FADE_RATE);
-        if (pg.leftIntensity <= 0) pg.leftWave = -1;
-      }
-      pg.left.material.uniforms.uWaveFront.value = pg.leftWave;
-      pg.left.material.uniforms.uIntensity.value = pg.leftIntensity;
+      // Decay intensity when not being actively fed by an arc
+      pg.leftIntensity = Math.max(0, pg.leftIntensity - DECAY_RATE * safeDt);
+      pg.rightIntensity = Math.max(0, pg.rightIntensity - DECAY_RATE * safeDt);
 
-      // --- Right pillar ---
-      if (pg.rightWave >= 0 && pg.rightWave < 1.0) {
-        pg.rightWave = Math.min(1.0, pg.rightWave + SWEEP_SPEED);
-      } else if (pg.rightWave >= 1.0) {
-        pg.rightIntensity = Math.max(0, pg.rightIntensity - FADE_RATE);
-        if (pg.rightIntensity <= 0) pg.rightWave = -1;
-      }
-      pg.right.material.uniforms.uWaveFront.value = pg.rightWave;
-      pg.right.material.uniforms.uIntensity.value = pg.rightIntensity;
+      // Push uniforms
+      const lu = pg.left.material.uniforms;
+      lu.uIntensity.value = pg.leftIntensity;
+      lu.uTime.value = time;
+      lu.uFlicker.value = Math.random(); // new random seed every frame for crackle
+
+      const ru = pg.right.material.uniforms;
+      ru.uIntensity.value = pg.rightIntensity;
+      ru.uTime.value = time;
+      ru.uFlicker.value = Math.random();
     });
   }
 
@@ -1165,9 +1268,16 @@ export class ClubDecor {
     const subBass = bandValues.subBass || 0;
     const bass = bandValues.bass || 0;
     const bassLevel = Math.max(subBass, bass) * 0.6 + (subBass + bass) * 0.2;
-    // Only fire arcs when bass is above a meaningful threshold
-    const BASS_THRESHOLD = 0.08;
+    // Higher threshold — electricity only comes alive to real bass
+    const BASS_THRESHOLD = 0.15;
     const bassActive = bassLevel > BASS_THRESHOLD;
+    // Quadratic intensity — light bass = barely visible, heavy bass = blazing
+    const bassIntensity = bassLevel * bassLevel;
+
+    // Bass-reactive color: deeper bass → purple-violet, lighter → blue-white
+    const bassColorR = 0.4 + (1.0 - bassLevel) * 0.2;
+    const bassColorG = 0.5 + (1.0 - bassLevel) * 0.3;
+    const bassColorB = 1.0;
 
     this.electricArcs.forEach(arc => {
       arc.cooldown = Math.max(0, arc.cooldown - dt);
@@ -1186,16 +1296,16 @@ export class ClubDecor {
             arc.isOn = false;
             arc._restrike = true;
           } else {
-            // End of discharge — cooldown scales inversely with bass
+            // End of discharge
             arc.isOn = false;
             arc._restrike = false;
             arc.mainMat.opacity = 0;
             arc.branchMat.opacity = 0;
             arc.branch2Mat.opacity = 0;
-            // Heavy bass = shorter cooldown (more frequent), low bass = long silence
+            // Heavy bass = shorter cooldown, low bass = long silence
             const bassCooldown = bassActive
-              ? 0.12 + Math.random() * 0.2 - bassLevel * 0.1
-              : 0.5 + Math.random() * 1.0;
+              ? 0.1 + Math.random() * 0.15 - bassIntensity * 0.08
+              : 0.8 + Math.random() * 1.5;
             arc.cooldown = Math.max(0.06, bassCooldown);
           }
         } else {
@@ -1218,40 +1328,42 @@ export class ClubDecor {
           arc.branch2Line.geometry.dispose();
           arc.branch2Line.geometry = this._createLightningGeo({ x: b2X, y: midY, z: midZ }, b2End, 8, 0.3);
 
-          // Rapid on/off flicker — intensity scales with bass
+          // Rapid on/off flicker — intensity driven by quadratic bass
           const flicker = Math.random() > 0.25 ? (0.6 + Math.random() * 0.4) : 0;
-          const bassMult = 0.4 + bassLevel * 1.2; // bass drives brightness
+          const bassMult = 0.3 + bassIntensity * 2.0;
           arc.mainMat.opacity = Math.min(1.0, flicker * bassMult);
           arc.branchMat.opacity = Math.min(1.0, flicker * bassMult * 0.6);
           arc.branch2Mat.opacity = Math.min(1.0, flicker * bassMult * 0.35);
 
-          // Trigger pillar glow sweep while arc is active — scaled by bass
+          // Feed pillar glow — instant illumination while arc is active
           const pg = this.pillarGlows[arc.pillarIndex];
           if (pg && flicker > 0) {
-            const si = 0.3 + bassLevel * 0.7;
-            // Reset wavefront to top if not already sweeping
-            if (pg.leftWave < 0) pg.leftWave = 0;
-            if (pg.rightWave < 0) pg.rightWave = 0;
-            pg.leftIntensity = Math.min(1.0, Math.max(pg.leftIntensity, si));
-            pg.rightIntensity = Math.min(1.0, Math.max(pg.rightIntensity, si));
+            const si = Math.min(1.0, bassIntensity * 1.8 + 0.15);
+            // Left pillar: immediate
+            pg.leftIntensity = Math.max(pg.leftIntensity, si);
+            // Right pillar: slight delay
+            if (!pg._rightDelay || pg._rightDelay <= 0) {
+              pg._rightDelay = 0.005 + Math.random() * 0.01;
+            }
+            pg._rightPendingIntensity = si;
+            // Bass-reactive color
+            pg.left.material.uniforms.uColor.value.setRGB(bassColorR, bassColorG, bassColorB);
+            pg.right.material.uniforms.uColor.value.setRGB(bassColorR, bassColorG, bassColorB);
           }
         }
       } else if (arc.cooldown <= 0) {
         // Re-strike continuation or fresh bass-driven strike
         const isRestrike = arc._restrike;
-        // Fresh strikes: ONLY fire on bass energy, no random chance
+        // ONLY fire on bass energy — no random firing without bass
         const shouldFire = isRestrike
-          ? bassActive   // re-strikes continue only if bass is still active
-          : (bassLevel > 0.15 && Math.random() < bassLevel * 0.6)  // probability scales with bass
-            || (isBeat && bassLevel > BASS_THRESHOLD);              // beat + any bass = fire
+          ? bassActive
+          : (bassLevel > 0.2 && Math.random() < bassIntensity * 0.8);
         if (shouldFire) {
           arc.isOn = true;
           arc._restrike = false;
-          // Stroke duration scales with bass intensity
-          arc.duration = 0.016 + Math.random() * 0.035 + bassLevel * 0.015;
+          arc.duration = 0.016 + Math.random() * 0.035 + bassIntensity * 0.02;
           if (!isRestrike) {
-            // More re-strikes when bass is heavier
-            arc.strikeCount = 1 + Math.floor(bassLevel * 4) + (isBeat ? 1 : 0);
+            arc.strikeCount = 1 + Math.floor(bassIntensity * 5);
           }
           arc.mainLine.geometry.dispose();
           arc.mainLine.geometry = this._createLightningGeo(arc.from, arc.to, 24, 0.8);
@@ -1259,15 +1371,27 @@ export class ClubDecor {
           arc.branchLine.geometry = this._createLightningGeo(arc.midPoint, arc.branchEnd, 10, 0.4);
           arc.branch2Line.geometry.dispose();
           arc.branch2Line.geometry = this._createLightningGeo(arc.midPoint2, arc.branchEnd2, 8, 0.3);
+
+          // Trigger pillar glow — instant illumination
           const pg = this.pillarGlows[arc.pillarIndex];
           if (pg) {
-            const si = 0.4 + bassLevel * 0.6;
-            // Start sweep from top of pillar
-            pg.leftWave = 0;
-            pg.rightWave = 0;
-            pg.leftIntensity = Math.min(1.0, si);
-            pg.rightIntensity = Math.min(1.0, si);
+            const si = Math.min(1.0, 0.3 + bassIntensity * 1.2);
+            pg.leftIntensity = Math.max(pg.leftIntensity, si);
+            // Right pillar: slight propagation delay
+            pg._rightDelay = 0.005 + Math.random() * 0.01;
+            pg._rightPendingIntensity = si;
           }
+        }
+      }
+
+      // Handle right-pillar propagation delay
+      const pg = this.pillarGlows[arc.pillarIndex];
+      if (pg && pg._rightDelay > 0) {
+        pg._rightDelay -= dt;
+        if (pg._rightDelay <= 0) {
+          const si = pg._rightPendingIntensity || 0.5;
+          pg.rightIntensity = Math.max(pg.rightIntensity, si);
+          pg._rightDelay = 0;
         }
       }
     });

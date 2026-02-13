@@ -697,13 +697,15 @@ export class ConcertStage {
 
         // Scale: cone base radius grows with distance (simulating beam spread)
         // SpotLight angle is ~PI/6 (30°), so spread radius = dist * tan(angle)
+        // Extend beams 60% past target so cones don't end abruptly mid-air
+        const beamLen = dist * 1.6;
         const spotAngle = 0.52; // ~PI/6
         const coreAngle = 0.15; // tighter core
-        const beamRadius = dist * Math.tan(spotAngle);
-        const coreRadius = dist * Math.tan(coreAngle);
+        const beamRadius = beamLen * Math.tan(spotAngle);
+        const coreRadius = beamLen * Math.tan(coreAngle);
 
-        fixture.beam.scale.set(beamRadius, dist, beamRadius);
-        if (fixture.core) fixture.core.scale.set(coreRadius, dist, coreRadius);
+        fixture.beam.scale.set(beamRadius, beamLen, beamRadius);
+        if (fixture.core) fixture.core.scale.set(coreRadius, beamLen, coreRadius);
       }
 
       // Beam color and opacity — capped low to prevent additive washout

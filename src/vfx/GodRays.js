@@ -80,14 +80,14 @@ export class GodRays {
     //
     // This makes the arch peak project furthest inward and the bottom edge
     // project least, creating a realistic angled shaft.
-    const floorLevel = 0.5;
-    const spread = 1.4; // Z-axis spread factor at floor
+    const floorLevel = 0.02; // at floor level so rays visually touch ground in VR
+    const spread = 1.6; // Z-axis spread factor at floor
 
     const flr = win.map(([wx, wy, wz]) => {
       const drop = wy - floorLevel; // how far this point falls
       // Inward distance proportional to drop height (steeper angle for a natural look)
-      // Using ~0.6 ratio: for every 1m of drop, light travels 0.6m inward
-      const inwardDist = drop * 0.6;
+      // Using ~0.7 ratio: for every 1m of drop, light travels 0.7m inward
+      const inwardDist = drop * 0.7;
       const fx = wallX + inward * inwardDist;
       const fz = windowZ + (wz - windowZ) * spread;
       return [fx, floorLevel, fz];
