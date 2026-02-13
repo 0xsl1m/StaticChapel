@@ -1,9 +1,9 @@
 /**
  * SoundSystem - Void Reality professional PA rig
  * Floor-stacked subwoofer bins + flown line array speakers + rigging hardware
- * Audio-reactive: subs pulse on bass, arrays glow on mids/highs
+ * Static display only — no audio-reactive effects
  *
- * Reference: Void Acoustics touring rig style — white/light grey cabinets,
+ * Reference: Void Acoustics touring rig style — dark charcoal cabinets,
  * large sub stacks 3-high flanking stage, line arrays flown close to stage
  * Deep recessed ports, embossed branding, aggressive industrial aesthetic
  */
@@ -42,8 +42,6 @@ const VOID_DARK = 0x111114;        // near-black accents/edges
 const GRILLE_GREY = 0x2a2a30;      // dark grille
 const GRILLE_DARK = 0x141418;      // sub grille (very dark)
 const METAL_GREY = 0x555555;       // rigging hardware
-const VOID_PURPLE = 0x8B00FF;      // emissive glow on subs
-const ARRAY_CYAN = 0x00CCFF;       // emissive glow on arrays
 const PORT_BLACK = 0x030303;       // deep port interior
 const LOGO_SILVER = 0x888890;      // embossed logo — subtle silver contrast
 
@@ -58,10 +56,7 @@ export class SoundSystem {
     this.group = new THREE.Group();
     this.group.name = 'soundSystem';
 
-    // References for audio reactivity
-    this.subStacks = [];   // { cabinets[], grilleMats[], embossedMats[] }
-    this.lineArrays = [];  // { boxFrontMats[], side }
-    this.chainMeshes = []; // InstancedMesh refs
+    this.chainMeshes = []; // InstancedMesh refs for disposal
 
     this.build();
     this.scene.add(this.group);
@@ -87,18 +82,10 @@ export class SoundSystem {
   }
 
   createSingleSubStack(x, z, side) {
-    const stack = { cabinets: [], grilleMats: [], embossedMats: [] };
-
     for (let i = 0; i < SUBS_PER_STACK; i++) {
       const baseY = i * SUB_H;
-      const result = this.createSubCabinet(x, baseY + SUB_H / 2, z, i === 0, side);
-      stack.cabinets.push(result.cabinet);
-      stack.grilleMats.push(result.grilleMat);
-      stack.embossedMats.push(result.embossedMat);
-      result.cabinet.userData.baseY = baseY + SUB_H / 2;
+      this.createSubCabinet(x, baseY + SUB_H / 2, z, i === 0, side);
     }
-
-    this.subStacks.push(stack);
   }
 
   createSubCabinet(x, y, z, isBottom, side) {
@@ -152,8 +139,6 @@ export class SoundSystem {
       color: GRILLE_DARK,
       roughness: 0.45,
       metalness: 0.5,
-      emissive: new THREE.Color(VOID_PURPLE),
-      emissiveIntensity: 0,
     });
     const grilleGeo = new THREE.PlaneGeometry(recessW - 0.01, recessH - 0.01);
     const grille = new THREE.Mesh(grilleGeo, grilleMat);
@@ -212,14 +197,11 @@ export class SoundSystem {
     }
 
     // --- EMBOSSED 3D LOGO on side (replaces CanvasTexture) ---
-    let embossedMat = null;
     if (this.Q.subEmbossedLogo !== false) {
-      embossedMat = new THREE.MeshStandardMaterial({
+      const embossedMat = new THREE.MeshStandardMaterial({
         color: LOGO_SILVER, // subtle silver contrast against dark cabinet
         roughness: 0.25,    // smoother than matte body — catches light
         metalness: 0.45,    // slightly metallic for embossed look
-        emissive: new THREE.Color(VOID_PURPLE),
-        emissiveIntensity: 0,
       });
 
       const logoGroup = new THREE.Group();
@@ -318,8 +300,6 @@ export class SoundSystem {
 
     cabinet.position.set(x, y, z);
     this.group.add(cabinet);
-
-    return { cabinet, grilleMat, embossedMat };
   }
 
   // --- Embossed 3D text builder (geometric block letters) ---
@@ -414,7 +394,6 @@ export class SoundSystem {
       const arrayGroup = new THREE.Group();
       arrayGroup.position.set(x, ARRAY_TOP_Y, ARRAY_Z);
 
-      const boxFrontMats = [];
       let cumulativeY = 0;
 
       for (let i = 0; i < BOXES_PER_ARRAY; i++) {
@@ -425,7 +404,6 @@ export class SoundSystem {
         result.boxGroup.rotation.x = angle;
 
         arrayGroup.add(result.boxGroup);
-        boxFrontMats.push(result.frontMat);
 
         cumulativeY -= BOX_H + 0.03;
       }
@@ -434,7 +412,6 @@ export class SoundSystem {
       arrayGroup.rotation.y = Math.PI;
 
       this.group.add(arrayGroup);
-      this.lineArrays.push({ arrayGroup, boxFrontMats, side: side > 0 ? 'right' : 'left' });
     });
   }
 
@@ -480,13 +457,11 @@ export class SoundSystem {
     frontRecess.position.set(0, 0, -BOX_D / 2 + frontRecessDepth / 2 - 0.001);
     boxGroup.add(frontRecess);
 
-    // --- Front grille (dark, emissive — sits in recess) ---
+    // --- Front grille (dark — sits in recess) ---
     const frontMat = new THREE.MeshStandardMaterial({
       color: GRILLE_GREY,
       roughness: 0.35,
       metalness: 0.5,
-      emissive: new THREE.Color(ARRAY_CYAN),
-      emissiveIntensity: 0,
     });
     const frontGeo = new THREE.PlaneGeometry(avgW - 0.1, BOX_H - 0.08);
     const front = new THREE.Mesh(frontGeo, frontMat);
@@ -705,62 +680,10 @@ export class SoundSystem {
   }
 
   // ==================================================================
-  //  UPDATE (audio-reactive)
+  //  UPDATE (no-op — speakers are static display only)
   // ==================================================================
-  update(time, bandValues, energy) {
-    if (!bandValues) bandValues = {};
-    if (energy === undefined) energy = 0;
-
-    this.updateSubs(time, bandValues, energy);
-    this.updateArrays(time, bandValues, energy);
-  }
-
-  updateSubs(time, bandValues, energy) {
-    const subBass = bandValues.subBass || 0;
-    const bass = bandValues.bass || 0;
-    const bassEnergy = (subBass + bass) / 2;
-
-    for (let s = 0; s < this.subStacks.length; s++) {
-      const stack = this.subStacks[s];
-
-      // Grille emissive glow
-      for (let g = 0; g < stack.grilleMats.length; g++) {
-        stack.grilleMats[g].emissiveIntensity = bassEnergy * 2.5;
-      }
-
-      // Embossed logo emissive glow (subtle purple on bass hits)
-      for (let e = 0; e < stack.embossedMats.length; e++) {
-        if (stack.embossedMats[e]) stack.embossedMats[e].emissiveIntensity = bassEnergy * 1.5;
-      }
-
-      // Cabinet vibration on heavy bass
-      for (let c = 0; c < stack.cabinets.length; c++) {
-        const cab = stack.cabinets[c];
-        if (bassEnergy > 0.5) {
-          const shake = Math.sin(time * 100) * bassEnergy * 0.015;
-          cab.position.y = cab.userData.baseY + shake;
-        } else {
-          cab.position.y = cab.userData.baseY;
-        }
-      }
-    }
-  }
-
-  updateArrays(time, bandValues, energy) {
-    const mid = bandValues.mid || 0;
-    const highMid = bandValues.highMid || 0;
-    const presence = bandValues.presence || 0;
-    const highEnergy = (mid + highMid + presence) / 3;
-
-    for (let a = 0; a < this.lineArrays.length; a++) {
-      const array = this.lineArrays[a];
-      const boxCount = array.boxFrontMats.length;
-
-      for (let i = 0; i < boxCount; i++) {
-        const boxFactor = 0.7 + ((boxCount - 1 - i) / boxCount) * 0.3;
-        array.boxFrontMats[i].emissiveIntensity = highEnergy * boxFactor * 1.8;
-      }
-    }
+  update() {
+    // No audio-reactive effects — speakers are static
   }
 
   // ==================================================================
@@ -770,15 +693,6 @@ export class SoundSystem {
     this.chainMeshes.forEach(chain => {
       chain.geometry.dispose();
       chain.material.dispose();
-    });
-
-    this.subStacks.forEach(stack => {
-      stack.grilleMats.forEach(m => m.dispose());
-      stack.embossedMats.forEach(m => m && m.dispose());
-    });
-
-    this.lineArrays.forEach(array => {
-      array.boxFrontMats.forEach(m => m.dispose());
     });
 
     this.group.traverse(child => {

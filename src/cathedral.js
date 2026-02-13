@@ -382,7 +382,7 @@ export class Cathedral {
         const glassMat = new THREE.MeshBasicMaterial({
           color: color,
           transparent: true,
-          opacity: 0.55,
+          opacity: 0.35,
           side: THREE.DoubleSide
         });
 
@@ -416,7 +416,7 @@ export class Cathedral {
         const traceryMat = new THREE.MeshBasicMaterial({
           color: color,
           transparent: true,
-          opacity: 0.7,
+          opacity: 0.45,
           side: THREE.DoubleSide
         });
         const rosette = new THREE.Mesh(
@@ -660,12 +660,13 @@ export class Cathedral {
     this.roseWindow = roseGroup;
 
     // Multi-colored rose window light (warm with purple tint)
-    const roseLight = new THREE.PointLight(0xbb66ff, 0.3, 22);
-    roseLight.position.set(0, 22, -this.naveLength / 2 + 2);
+    // decay=0.5 so light actually reaches nearby surfaces (default 2.0 kills it at distance)
+    const roseLight = new THREE.PointLight(0xbb66ff, 0.5, 30, 0.5);
+    roseLight.position.set(0, 20, -this.naveLength / 2 + 3);
     this.group.add(roseLight);
     // Secondary warm accent
-    const roseWarmLight = new THREE.PointLight(0xffeedd, 0.12, 15);
-    roseWarmLight.position.set(0, 22, -this.naveLength / 2 + 1.5);
+    const roseWarmLight = new THREE.PointLight(0xffeedd, 0.2, 20, 0.5);
+    roseWarmLight.position.set(0, 18, -this.naveLength / 2 + 3);
     this.group.add(roseWarmLight);
   }
 
@@ -1240,7 +1241,7 @@ export class Cathedral {
     // Subtle stained glass color cycling
     for (const win of this.windows) {
       const shift = Math.sin(time * 0.3 + win.z * 0.1) * 0.1;
-      const intensity = 0.6 + shift;
+      const intensity = 0.35 + shift * 0.5;
       for (const panel of win.panels) {
         panel.material.opacity = intensity;
       }

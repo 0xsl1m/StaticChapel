@@ -110,7 +110,7 @@ export class GodRays {
     for (let i = 0; i < 8; i++) {
       const z = -naveLength / 2 + windowSpacing * (i + 1);
       const color = WINDOW_COLORS[i];
-      const baseOpacity = 0.08 + Math.random() * 0.06;
+      const baseOpacity = 0.04 + Math.random() * 0.04;
 
       for (const side of [-1, 1]) {
         const wallX = side * innerWallX;
@@ -143,7 +143,7 @@ export class GodRays {
       const breath = 0.6 + 0.4 * Math.sin(time * 0.4 + s.phaseOffset);
       const audioBoost = 1.0 + midEnergy * 1.0;
       const targetOpacity = s.baseOpacity * breath * audioBoost;
-      s.mesh.material.opacity = Math.min(0.18, Math.max(0.02, targetOpacity));
+      s.mesh.material.opacity = Math.min(0.10, Math.max(0.01, targetOpacity));
     }
   }
 }

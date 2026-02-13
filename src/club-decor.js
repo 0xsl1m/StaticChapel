@@ -1263,7 +1263,7 @@ export class ClubDecor {
         mainLine: arc, mainMat: arcMat,
         branchLine: branch1, branchMat: branchMat1,
         branch2Line: branch2, branch2Mat: branchMat2,
-        from, to, pillarIndex: i,
+        from, to, pillarIndex: pairIdx,
         midPoint: midPt1, branchEnd: branchEnd1,
         midPoint2: midPt2, branchEnd2: branchEnd2,
         nextFlicker: 0.5 + Math.random() * 1.5,
