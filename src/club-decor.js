@@ -239,11 +239,54 @@ export class ClubDecor {
     const barH = 1.12;     // standard bar counter height (42-44 inches)
     const barD = 0.9;      // deeper counter
 
-    // ======== BACK BAR WALL — dark oak paneling against cathedral wall ========
+    // ======== BACK BAR WALL — very dark oak paneling with grain texture ========
     const backWallH = 4.5;
-    const backWallMat = new THREE.MeshStandardMaterial({
-      color: 0x0e0804, roughness: 0.82, metalness: 0.01,
-    });
+    const backWallMat = (() => {
+      // Procedural dark oak grain texture
+      const res = 256;
+      const c = document.createElement('canvas');
+      c.width = res; c.height = res;
+      const ctx = c.getContext('2d');
+      // Very dark oak base
+      ctx.fillStyle = '#0a0604';
+      ctx.fillRect(0, 0, res, res);
+      // Horizontal grain lines
+      for (let y = 0; y < res; y++) {
+        const grain = Math.sin(y * 0.25) * 0.3 +
+                      Math.sin(y * 0.6 + 1.5) * 0.2 +
+                      Math.sin(y * 1.3 + 3.0) * 0.1;
+        const v = grain * 0.5 + 0.5;
+        const r = Math.max(0, 10 + v * 8);
+        const g = Math.max(0, 6 + v * 5);
+        const b = Math.max(0, 4 + v * 3);
+        ctx.fillStyle = `rgba(${r},${g},${b},0.5)`;
+        ctx.fillRect(0, y, res, 1);
+      }
+      // Knots
+      for (let k = 0; k < 4; k++) {
+        const kx = ((k * 67 + 13) % res);
+        const ky = ((k * 89 + 37) % res);
+        ctx.fillStyle = 'rgba(4,2,1,0.5)';
+        ctx.beginPath();
+        ctx.ellipse(kx, ky, 12, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Fine noise
+      const id = ctx.getImageData(0, 0, res, res);
+      for (let i = 0; i < id.data.length; i += 4) {
+        const n = (Math.random() - 0.5) * 6;
+        id.data[i] = Math.max(0, Math.min(255, id.data[i] + n));
+        id.data[i + 1] = Math.max(0, Math.min(255, id.data[i + 1] + n));
+        id.data[i + 2] = Math.max(0, Math.min(255, id.data[i + 2] + n));
+      }
+      ctx.putImageData(id, 0, 0);
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(3, 2);
+      return new THREE.MeshStandardMaterial({
+        map: tex, color: 0xffffff, roughness: 0.85, metalness: 0.01,
+      });
+    })();
     // Sits flush against wall face (z=0 in local space, 0.08m thick)
     bar.add(place(new THREE.Mesh(
       new THREE.BoxGeometry(barW + 0.4, backWallH, 0.08), backWallMat
@@ -457,9 +500,9 @@ export class ClubDecor {
     bar.add(place(new THREE.Mesh(edgeTrimGeo, archTrimMat), 0, barH + 0.04, counterOuterZ + 0.1));
     bar.add(place(new THREE.Mesh(edgeTrimGeo, archTrimMat), 0, barH - 0.04, counterOuterZ + 0.1));
 
-    // Front panel — dark onyx with brass fluting
+    // Front panel — dark walnut with brass fluting
     const frontPanelMat = new THREE.MeshStandardMaterial({
-      color: 0x12100e, roughness: 0.15, metalness: 0.12,
+      color: 0x2a1810, roughness: 0.45, metalness: 0.05,
     });
     bar.add(place(new THREE.Mesh(
       new THREE.BoxGeometry(barW, barH - 0.06, 0.06), frontPanelMat
