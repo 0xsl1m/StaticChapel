@@ -174,26 +174,43 @@ export class ConcertStage {
     this.ledBacklight.position.set(0, STAGE_Y + 5, panelZ - 1.0);
     this.group.add(this.ledBacklight);
 
-    // --- VIDEO ELEMENT for energy sphere program ---
+    // --- VIDEO ELEMENT — energy sphere plays on all LED panels ---
     this._ledVideo = document.createElement('video');
     this._ledVideo.src = 'assets/video/energy-sphere.mp4';
     this._ledVideo.loop = true;
     this._ledVideo.muted = true;
     this._ledVideo.playsInline = true;
-    this._ledVideo.crossOrigin = 'anonymous';
+    this._ledVideo.setAttribute('playsinline', '');
+    this._ledVideo.setAttribute('webkit-playsinline', '');
+    this._ledVideo.preload = 'auto';
     this._ledVideoReady = false;
-    this._ledVideo.addEventListener('canplaythrough', () => {
+
+    // Track readiness — video needs at least one frame decoded
+    this._ledVideo.addEventListener('canplay', () => {
       this._ledVideoReady = true;
     });
-    // Autoplay on first user gesture
-    const startVideo = () => {
-      this._ledVideo.play().catch(() => {});
-      document.removeEventListener('click', startVideo);
-      document.removeEventListener('touchstart', startVideo);
+    this._ledVideo.addEventListener('playing', () => {
+      this._ledVideoReady = true;
+    });
+
+    // Try autoplay immediately (works on most browsers with muted video)
+    const tryPlay = () => {
+      if (this._ledVideo.paused) {
+        this._ledVideo.play().catch(() => {});
+      }
     };
-    document.addEventListener('click', startVideo);
-    document.addEventListener('touchstart', startVideo);
-    this._ledVideo.play().catch(() => {}); // attempt immediate autoplay
+    tryPlay();
+
+    // Also retry on any user gesture (needed for Safari / mobile)
+    const gesturePlay = () => {
+      tryPlay();
+      document.removeEventListener('click', gesturePlay);
+      document.removeEventListener('touchstart', gesturePlay);
+      document.removeEventListener('pointerdown', gesturePlay);
+    };
+    document.addEventListener('click', gesturePlay);
+    document.addEventListener('touchstart', gesturePlay);
+    document.addEventListener('pointerdown', gesturePlay);
   }
 
   // ==================================================================
@@ -554,42 +571,34 @@ export class ConcertStage {
   }
 
   // ------------------------------------------------------------------
-  //  LED Panel animation — 6 sacred geometry + video programs
-  //  Cycles every ~15 seconds per program
+  //  LED Panel — plays energy sphere video on all panels
   // ------------------------------------------------------------------
   updateLEDPanels(time, bandValues, energy) {
     this._ledFrame = (this._ledFrame || 0) + 1;
     if (this._ledFrame % (this._ledUpdateInterval || 1) !== 0) return;
 
-    const bass = bandValues.bass || 0;
-    const mid = bandValues.mid || 0;
-    const highMid = bandValues.highMid || 0;
-    const treble = bandValues.treble || 0;
-    const subBass = bandValues.subBass || 0;
+    // Try to start video if not playing yet
+    if (this._ledVideo && this._ledVideo.paused) {
+      this._ledVideo.play().catch(() => {});
+    }
 
-    const programDuration = 15.0;
-    const totalCycle = programDuration * 6;
-    const cycleTime = time % totalCycle;
-    const programIndex = Math.floor(cycleTime / programDuration) % 6;
+    const videoReady = this._ledVideoReady &&
+                       this._ledVideo &&
+                       !this._ledVideo.paused &&
+                       this._ledVideo.readyState >= 2; // HAVE_CURRENT_DATA
 
     for (let i = 0; i < this.ledPanels.length; i++) {
       const panel = this.ledPanels[i];
-      const { canvas, ctx, texture, col, row } = panel;
+      const { canvas, ctx, texture } = panel;
       const w = canvas.width;
       const h = canvas.height;
-      const nx = col / Math.max(1, this.ledColumns - 1);
-      const ny = row / Math.max(1, this.ledRows - 1);
 
-      ctx.fillStyle = '#020206';
-      ctx.fillRect(0, 0, w, h);
-
-      switch (programIndex) {
-        case 0: this._led_FlowerOfLife(ctx, w, h, time, nx, ny, bass, mid, energy); break;
-        case 1: this._led_Video(ctx, w, h, time, energy, bass); break;
-        case 2: this._led_MetatronsCube(ctx, w, h, time, nx, ny, bass, treble, energy); break;
-        case 3: this._led_FractalZoom(ctx, w, h, time, nx, ny, subBass, bass, energy); break;
-        case 4: this._led_SriYantra(ctx, w, h, time, nx, ny, mid, highMid, energy); break;
-        case 5: this._led_TorusField(ctx, w, h, time, nx, ny, bass, mid, highMid, energy); break;
+      if (videoReady) {
+        ctx.drawImage(this._ledVideo, 0, 0, w, h);
+      } else {
+        // Simple dark fallback until video loads
+        ctx.fillStyle = '#020206';
+        ctx.fillRect(0, 0, w, h);
       }
 
       texture.needsUpdate = true;
@@ -597,313 +606,6 @@ export class ConcertStage {
 
     if (this.ledBacklight) {
       this.ledBacklight.intensity = 0.15 + energy * 0.25;
-    }
-  }
-
-  // ==================================================================
-  //  SACRED GEOMETRY + VIDEO LED PROGRAMS
-  //
-  //  Design: Deep sacred geometric patterns, audio-reactive, cathedral theme
-  //  All use simple math — no external libraries
-  // ==================================================================
-
-  // --- Program 0: FLOWER OF LIFE — interlocking circles, audio-reactive bloom ---
-  _led_FlowerOfLife(ctx, w, h, time, nx, ny, bass, mid, energy) {
-    const cx = w / 2, cy = h / 2;
-    const baseR = w * 0.12 * (1 + bass * 0.3);
-    const hueBase = (time * 12) % 360;
-    const zoom = 1 + Math.sin(time * 0.2) * 0.15 + energy * 0.2;
-
-    ctx.lineWidth = 1 + energy * 1.5;
-
-    // Seed of Life: 7 circles (center + 6 around)
-    const circles = [{ x: 0, y: 0 }];
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + time * 0.1;
-      circles.push({ x: Math.cos(a) * baseR * zoom, y: Math.sin(a) * baseR * zoom });
-    }
-    // Second ring: 6 more
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + Math.PI / 6 + time * 0.1;
-      circles.push({ x: Math.cos(a) * baseR * 1.73 * zoom, y: Math.sin(a) * baseR * 1.73 * zoom });
-    }
-
-    circles.forEach((c, idx) => {
-      const hue = (hueBase + idx * 25) % 360;
-      const lum = 20 + energy * 30 + mid * 15;
-      const alpha = 0.4 + energy * 0.4 + (idx < 7 ? 0.15 : 0);
-      ctx.strokeStyle = `hsla(${hue}, 90%, ${Math.min(60, lum)}%, ${Math.min(0.9, alpha)})`;
-      ctx.beginPath();
-      ctx.arc(cx + c.x, cy + c.y, baseR * zoom, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-
-    // Central glow on beat
-    if (bass > 0.3) {
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR * zoom * 2);
-      grad.addColorStop(0, `hsla(${hueBase + 180}, 100%, 75%, ${(bass - 0.3) * 0.6})`);
-      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    }
-  }
-
-  // --- Program 1: ENERGY SPHERE VIDEO — plays MP4 video to canvas ---
-  _led_Video(ctx, w, h, time, energy, bass) {
-    if (this._ledVideoReady && this._ledVideo && !this._ledVideo.paused) {
-      ctx.drawImage(this._ledVideo, 0, 0, w, h);
-      // Beat-reactive brightness overlay
-      if (bass > 0.4) {
-        ctx.fillStyle = `rgba(100, 60, 255, ${(bass - 0.4) * 0.3})`;
-        ctx.fillRect(0, 0, w, h);
-      }
-    } else {
-      // Fallback: pulsing energy sphere procedural
-      const cx = w / 2, cy = h / 2;
-      const r = w * 0.25 * (1 + bass * 0.3);
-      const hue = (time * 20) % 360;
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      grad.addColorStop(0, `hsla(${hue}, 100%, 80%, ${0.6 + energy * 0.3})`);
-      grad.addColorStop(0.5, `hsla(${(hue + 40) % 360}, 90%, 40%, ${0.3 + energy * 0.2})`);
-      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    }
-  }
-
-  // --- Program 2: METATRON'S CUBE — rotating sacred geometry with 13 circles ---
-  _led_MetatronsCube(ctx, w, h, time, nx, ny, bass, treble, energy) {
-    const cx = w / 2, cy = h / 2;
-    const baseR = w * 0.08;
-    const outerR = w * 0.35 * (1 + bass * 0.15);
-    const rot = time * 0.15;
-    const hueBase = (time * 8 + nx * 60) % 360;
-
-    // 13 circle positions: center + inner 6 + outer 6
-    const pts = [{ x: cx, y: cy }];
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + rot;
-      pts.push({ x: cx + Math.cos(a) * outerR * 0.5, y: cy + Math.sin(a) * outerR * 0.5 });
-    }
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + rot;
-      pts.push({ x: cx + Math.cos(a) * outerR, y: cy + Math.sin(a) * outerR });
-    }
-
-    // Draw connecting lines (Metatron's Cube = all points connected)
-    ctx.lineWidth = 0.5 + energy;
-    const lineLum = 15 + energy * 25;
-    for (let i = 0; i < pts.length; i++) {
-      for (let j = i + 1; j < pts.length; j++) {
-        const hue = (hueBase + (i + j) * 12) % 360;
-        ctx.strokeStyle = `hsla(${hue}, 80%, ${Math.min(50, lineLum)}%, ${0.15 + energy * 0.2})`;
-        ctx.beginPath();
-        ctx.moveTo(pts[i].x, pts[i].y);
-        ctx.lineTo(pts[j].x, pts[j].y);
-        ctx.stroke();
-      }
-    }
-
-    // Draw circles at each point
-    pts.forEach((p, idx) => {
-      const hue = (hueBase + idx * 27) % 360;
-      const lum = 25 + energy * 30 + bass * 15;
-      ctx.strokeStyle = `hsla(${hue}, 90%, ${Math.min(60, lum)}%, ${0.5 + energy * 0.3})`;
-      ctx.lineWidth = 1 + energy;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, baseR * (idx === 0 ? 1.3 : 1) * (1 + treble * 0.3), 0, Math.PI * 2);
-      ctx.stroke();
-    });
-
-    // Central star flash
-    if (bass > 0.5) {
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR * 0.4);
-      grad.addColorStop(0, `hsla(${(hueBase + 180) % 360}, 100%, 85%, ${(bass - 0.5) * 0.6})`);
-      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    }
-  }
-
-  // --- Program 3: FRACTAL ZOOM — infinite Mandelbrot/Julia set zoom ---
-  _led_FractalZoom(ctx, w, h, time, nx, ny, subBass, bass, energy) {
-    const hueBase = (time * 10) % 360;
-    // Slowly zoom in over time, bass accelerates zoom
-    const zoomLevel = 1.5 + time * 0.05 + bass * 0.5;
-    const scale = Math.pow(0.97, zoomLevel);
-    // Julia set constant — slowly rotating for variety
-    const cR = -0.7 + Math.sin(time * 0.08) * 0.15;
-    const cI = 0.27 + Math.cos(time * 0.06) * 0.1;
-    const maxIter = 24; // low for performance on canvas
-
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const data = imgData.data;
-
-    for (let py = 0; py < h; py += 2) { // step 2 for performance
-      for (let px = 0; px < w; px += 2) {
-        let zr = (px - w / 2) / (w * 0.4) * scale;
-        let zi = (py - h / 2) / (h * 0.4) * scale;
-        let iter = 0;
-        while (zr * zr + zi * zi < 4 && iter < maxIter) {
-          const tmp = zr * zr - zi * zi + cR;
-          zi = 2 * zr * zi + cI;
-          zr = tmp;
-          iter++;
-        }
-        const t = iter / maxIter;
-        const hue = (hueBase + t * 300) % 360;
-        const lum = iter === maxIter ? 0 : (15 + t * 45 * (0.5 + energy * 0.5));
-        // Convert HSL to RGB inline for performance
-        const hN = hue / 60;
-        const s = 0.85;
-        const l = Math.min(0.6, lum / 100);
-        const c = (1 - Math.abs(2 * l - 1)) * s;
-        const x = c * (1 - Math.abs(hN % 2 - 1));
-        const m = l - c / 2;
-        let r1 = 0, g1 = 0, b1 = 0;
-        if (hN < 1) { r1 = c; g1 = x; }
-        else if (hN < 2) { r1 = x; g1 = c; }
-        else if (hN < 3) { g1 = c; b1 = x; }
-        else if (hN < 4) { g1 = x; b1 = c; }
-        else if (hN < 5) { r1 = x; b1 = c; }
-        else { r1 = c; b1 = x; }
-        const rV = Math.round((r1 + m) * 255);
-        const gV = Math.round((g1 + m) * 255);
-        const bV = Math.round((b1 + m) * 255);
-
-        // Fill 2x2 block
-        for (let dy = 0; dy < 2 && py + dy < h; dy++) {
-          for (let dx = 0; dx < 2 && px + dx < w; dx++) {
-            const idx = ((py + dy) * w + (px + dx)) * 4;
-            data[idx] = rV; data[idx + 1] = gV; data[idx + 2] = bV; data[idx + 3] = 255;
-          }
-        }
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-
-    // Beat glow overlay
-    if (bass > 0.4) {
-      const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.4);
-      grad.addColorStop(0, `hsla(${(hueBase + 180) % 360}, 100%, 70%, ${(bass - 0.4) * 0.4})`);
-      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    }
-  }
-
-  // --- Program 4: SRI YANTRA — nested triangles + Fibonacci spiral ---
-  _led_SriYantra(ctx, w, h, time, nx, ny, mid, highMid, energy) {
-    const cx = w / 2, cy = h / 2;
-    const hueBase = (time * 10 + nx * 40) % 360;
-    const pulse = 1 + Math.sin(time * 0.5) * 0.08 + energy * 0.15;
-
-    // 9 interlocking triangles (Sri Yantra simplified)
-    const triangleCount = 9;
-    ctx.lineWidth = 1 + energy;
-
-    for (let i = 0; i < triangleCount; i++) {
-      const frac = i / triangleCount;
-      const r = (w * 0.1 + frac * w * 0.35) * pulse;
-      const rot = (i % 2 === 0 ? 1 : -1) * (time * 0.08 + frac * 0.5);
-      const upward = i % 2 === 0; // alternating up/down triangles
-      const hue = (hueBase + i * 38) % 360;
-      const lum = 20 + energy * 25 + mid * 15;
-      const alpha = 0.35 + energy * 0.3 + (i < 3 ? 0.15 : 0);
-
-      ctx.strokeStyle = `hsla(${hue}, 88%, ${Math.min(55, lum)}%, ${Math.min(0.9, alpha)})`;
-      ctx.beginPath();
-      for (let v = 0; v <= 3; v++) {
-        const a = rot + (v / 3) * Math.PI * 2 + (upward ? -Math.PI / 2 : Math.PI / 2);
-        const px = cx + Math.cos(a) * r;
-        const py = cy + Math.sin(a) * r;
-        if (v === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      ctx.stroke();
-    }
-
-    // Fibonacci spiral overlay
-    ctx.lineWidth = 1.5 + highMid * 2;
-    ctx.strokeStyle = `hsla(${(hueBase + 180) % 360}, 85%, ${30 + energy * 25}%, ${0.3 + energy * 0.3})`;
-    ctx.beginPath();
-    const phi = (1 + Math.sqrt(5)) / 2; // golden ratio
-    for (let a = 0; a < Math.PI * 8; a += 0.1) {
-      const spiralR = 2 * Math.pow(phi, a / (Math.PI * 2)) * (1 + mid * 0.3);
-      const sa = a + time * 0.15;
-      const px = cx + Math.cos(sa) * spiralR;
-      const py = cy + Math.sin(sa) * spiralR;
-      if (a === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-
-    // Center bindu (dot)
-    const binduR = 3 + energy * 4 + mid * 3;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, binduR);
-    grad.addColorStop(0, `hsla(${hueBase}, 100%, 80%, ${0.7 + energy * 0.3})`);
-    grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-  }
-
-  // --- Program 5: TORUS ENERGY FIELD — particle ring / torus knot ---
-  _led_TorusField(ctx, w, h, time, nx, ny, bass, mid, highMid, energy) {
-    const cx = w / 2, cy = h / 2;
-    const hueBase = (time * 8 + nx * 50) % 360;
-    const majorR = w * 0.28 * (1 + bass * 0.2);
-    const minorR = w * 0.1 * (1 + mid * 0.3);
-
-    // Draw torus cross-section as flowing particles
-    const particleCount = 120;
-    for (let i = 0; i < particleCount; i++) {
-      const t = i / particleCount;
-      // Torus parametric: angle around major radius
-      const theta = t * Math.PI * 2 + time * 0.3;
-      // Multiple loops around minor radius
-      const phi = t * Math.PI * 6 + time * 0.8; // 3:1 knot ratio
-
-      // 2D projection of torus
-      const r = majorR + minorR * Math.cos(phi);
-      const px = cx + r * Math.cos(theta);
-      const py = cy + r * Math.sin(theta) * 0.6; // squash for perspective
-
-      const depth = Math.sin(phi); // -1 to 1, used for brightness
-      const hue = (hueBase + t * 360) % 360;
-      const lum = 20 + (depth * 0.5 + 0.5) * 30 * (0.5 + energy * 0.5);
-      const size = 1.5 + (depth * 0.5 + 0.5) * 2 + energy * 1.5;
-      const alpha = 0.3 + (depth * 0.5 + 0.5) * 0.4 + energy * 0.2;
-
-      ctx.fillStyle = `hsla(${hue}, 90%, ${Math.min(60, lum)}%, ${Math.min(0.9, alpha)})`;
-      ctx.beginPath();
-      ctx.arc(px, py, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Energy flow lines connecting particles
-    ctx.lineWidth = 0.5 + energy;
-    ctx.strokeStyle = `hsla(${(hueBase + 120) % 360}, 80%, ${25 + energy * 20}%, ${0.15 + energy * 0.15})`;
-    ctx.beginPath();
-    for (let i = 0; i <= 60; i++) {
-      const t = i / 60;
-      const theta = t * Math.PI * 2 + time * 0.3;
-      const phi = t * Math.PI * 6 + time * 0.8;
-      const r = majorR + minorR * Math.cos(phi);
-      const px = cx + r * Math.cos(theta);
-      const py = cy + r * Math.sin(theta) * 0.6;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-
-    // Central energy glow
-    if (bass > 0.35) {
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, majorR * 0.5);
-      grad.addColorStop(0, `hsla(${(hueBase + 180) % 360}, 100%, 75%, ${(bass - 0.35) * 0.5})`);
-      grad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
     }
   }
 
