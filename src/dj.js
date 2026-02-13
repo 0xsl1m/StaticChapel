@@ -1,9 +1,10 @@
 /**
- * DJBooth - Gothic altar DJ booth with avatar, CDJs, mixer, and laptop
+ * DJBooth - Wrap-around LED booth with avatar, CDJs, mixer, and laptop
  * Phase 3: DJ presence and equipment on the cathedral stage
  *
  * Position: center of stage at roughly (0, stageY + 0.5, 24)
- * The altar/booth is 2m wide x 1m deep x 1m tall
+ * The booth is 3m wide x 1.2m deep x 1.1m tall with LED screens on
+ * front, left, and right sides playing energy-sphere.mp4 video.
  */
 import * as THREE from 'three';
 
@@ -13,10 +14,13 @@ const STAGE_Z = 24;
 const BOOTH_Y = STAGE_Y;        // sits on stage surface
 const BOOTH_CENTER_Z = STAGE_Z; // center of stage depth
 
+// Booth dimensions
+const BOOTH_W = 3.0;
+const BOOTH_D = 1.2;
+const BOOTH_H = 1.1;
+
 // --- Colors ---
 const DARK_ROBES = 0x0c0c16;
-const STONE_COLOR = 0x6a6460;
-const SCREEN_OFF = 0x050510;
 const HEADSET_COLOR = 0xDDDDDD;
 const SACRED_GOLD = 0xFFD700;
 
@@ -72,76 +76,120 @@ export class DJBooth {
   }
 
   // ==================================================================
-  //  ALTAR / DJ BOOTH - stone altar repurposed as DJ table
+  //  DJ BOOTH — dark matte body with wrap-around LED screens
   // ==================================================================
   createAltarBooth() {
-    const stoneProps = { color: STONE_COLOR, roughness: 0.8, metalness: 0.1 };
-    if (this.textures.stone) {
-      const st = this.textures.stone;
-      if (st.map) { st.map.repeat.set(2, 2); stoneProps.map = st.map; }
-      if (st.normalMap) { st.normalMap.repeat.set(2, 2); stoneProps.normalMap = st.normalMap; stoneProps.normalScale = new THREE.Vector2(0.8, 0.8); }
-      if (st.roughnessMap) { st.roughnessMap.repeat.set(2, 2); stoneProps.roughnessMap = st.roughnessMap; }
-    }
-    const stoneMat = new THREE.MeshStandardMaterial(stoneProps);
+    // Dark matte material for booth body (replaces stone)
+    const boothMat = new THREE.MeshStandardMaterial({
+      color: 0x0a0a0e,
+      roughness: 0.7,
+      metalness: 0.3,
+    });
 
-    const boothW = 2.0;
-    const boothD = 1.0;
-    const boothH = 1.0;
-
-    // Main altar surface
-    const altarGeo = new THREE.BoxGeometry(boothW, boothH, boothD);
-    const altar = new THREE.Mesh(altarGeo, stoneMat);
-    altar.position.set(0, BOOTH_Y + boothH / 2, BOOTH_CENTER_Z);
+    // Main body
+    const altarGeo = new THREE.BoxGeometry(BOOTH_W, BOOTH_H, BOOTH_D);
+    const altar = new THREE.Mesh(altarGeo, boothMat);
+    altar.position.set(0, BOOTH_Y + BOOTH_H / 2, BOOTH_CENTER_Z);
     altar.castShadow = true;
     altar.receiveShadow = true;
     this.group.add(altar);
 
-    // Decorative beveled edge on top
-    const topTrimMat = new THREE.MeshStandardMaterial({
-      color: SACRED_GOLD,
-      roughness: 0.3,
+    // Subtle dark metallic trim around top edge
+    const trimMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a22,
+      roughness: 0.2,
       metalness: 0.8,
-      emissive: new THREE.Color(SACRED_GOLD),
-      emissiveIntensity: 0.08,
     });
-
-    // Gold trim around top edge
-    const trimW = boothW + 0.06;
-    const trimD = boothD + 0.06;
-    const trimH = 0.04;
+    const trimW = BOOTH_W + 0.04;
+    const trimD = BOOTH_D + 0.04;
+    const trimH = 0.03;
     const topTrim = new THREE.Mesh(
       new THREE.BoxGeometry(trimW, trimH, trimD),
-      topTrimMat
+      trimMat
     );
-    topTrim.position.set(0, BOOTH_Y + boothH + trimH / 2, BOOTH_CENTER_Z);
+    topTrim.position.set(0, BOOTH_Y + BOOTH_H + trimH / 2, BOOTH_CENTER_Z);
     this.group.add(topTrim);
 
-    // LED facade panel on front of DJ booth
-    const facadeCanvas = document.createElement('canvas');
-    facadeCanvas.width = 128;
-    facadeCanvas.height = 64;
-    const facadeCtx = facadeCanvas.getContext('2d');
-    facadeCtx.fillStyle = '#050510';
-    facadeCtx.fillRect(0, 0, 128, 64);
+    // --- Wrap-around LED screens (front + left + right) ---
+    // Each panel has its own canvas for video rendering
+    const panelInset = 0.06; // inset from body edges
+    const panelH = BOOTH_H - 0.12; // slightly shorter than body
+    const panelY = BOOTH_Y + BOOTH_H / 2; // vertically centered on booth
 
-    const facadeTexture = new THREE.CanvasTexture(facadeCanvas);
-    facadeTexture.minFilter = THREE.LinearFilter;
-    facadeTexture.magFilter = THREE.LinearFilter;
+    this.ledPanels = [];
 
-    const facadeMat = new THREE.MeshBasicMaterial({ map: facadeTexture, toneMapped: false });
-    const facadeGeo = new THREE.PlaneGeometry(1.8, 0.8);
-    const facadeMesh = new THREE.Mesh(facadeGeo, facadeMat);
-    facadeMesh.position.set(0, BOOTH_Y + 0.5, BOOTH_CENTER_Z - boothD / 2 - 0.01);
-    this.group.add(facadeMesh);
+    const createLEDPanel = (w, h, px, py, pz, ry) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#050510';
+      ctx.fillRect(0, 0, 256, 128);
 
-    // Store for animation
-    this.facadePanel = { canvas: facadeCanvas, ctx: facadeCtx, texture: facadeTexture, mesh: facadeMesh };
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
 
-    // Thin bezel frame
-    const bezelGeo = new THREE.EdgesGeometry(facadeGeo);
-    const bezelLine = new THREE.LineSegments(bezelGeo, new THREE.LineBasicMaterial({ color: 0x333333 }));
-    bezelLine.position.copy(facadeMesh.position);
-    this.group.add(bezelLine);
+      const mat = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
+      const geo = new THREE.PlaneGeometry(w, h);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(px, py, pz);
+      mesh.rotation.y = ry;
+      this.group.add(mesh);
+
+      // Thin bezel
+      const bezelGeo = new THREE.EdgesGeometry(geo);
+      const bezel = new THREE.LineSegments(bezelGeo, new THREE.LineBasicMaterial({ color: 0x222233 }));
+      bezel.position.copy(mesh.position);
+      bezel.rotation.copy(mesh.rotation);
+      this.group.add(bezel);
+
+      this.ledPanels.push({ canvas, ctx, texture, mesh });
+    };
+
+    // Front panel (facing audience, -Z direction)
+    const frontW = BOOTH_W - panelInset * 2;
+    createLEDPanel(
+      frontW, panelH,
+      0, panelY, BOOTH_CENTER_Z - BOOTH_D / 2 - 0.01,
+      0
+    );
+
+    // Left panel (facing -X, from audience perspective the right side of the booth)
+    const sideW = BOOTH_D - panelInset * 2;
+    createLEDPanel(
+      sideW, panelH,
+      -BOOTH_W / 2 - 0.01, panelY, BOOTH_CENTER_Z,
+      Math.PI / 2
+    );
+
+    // Right panel (facing +X)
+    createLEDPanel(
+      sideW, panelH,
+      BOOTH_W / 2 + 0.01, panelY, BOOTH_CENTER_Z,
+      -Math.PI / 2
+    );
+
+    // Keep facadePanel reference for backwards compat (points to front panel)
+    this.facadePanel = this.ledPanels[0];
+  }
+
+  /**
+   * Set the shared video element (energy-sphere.mp4) for LED panels.
+   * Called from main.js after stage is initialized.
+   * @param {HTMLVideoElement} videoEl
+   */
+  setVideoElement(videoEl) {
+    this._ledVideo = videoEl;
+    this._ledVideoReady = false;
+    if (videoEl) {
+      videoEl.addEventListener('canplay', () => { this._ledVideoReady = true; });
+      videoEl.addEventListener('playing', () => { this._ledVideoReady = true; });
+      // Check if already ready
+      if (!videoEl.paused && videoEl.readyState >= 2) {
+        this._ledVideoReady = true;
+      }
+    }
   }
 
   // ==================================================================
@@ -149,8 +197,8 @@ export class DJBooth {
   // ==================================================================
   createCDJs() {
     const cdjPositions = [
-      [-0.55, BOOTH_Y + 1.02, BOOTH_CENTER_Z], // left CDJ
-      [ 0.55, BOOTH_Y + 1.02, BOOTH_CENTER_Z], // right CDJ
+      [-0.75, BOOTH_Y + BOOTH_H + 0.02, BOOTH_CENTER_Z], // left CDJ
+      [ 0.75, BOOTH_Y + BOOTH_H + 0.02, BOOTH_CENTER_Z], // right CDJ
     ];
 
     const bodyMat = new THREE.MeshStandardMaterial({
@@ -278,7 +326,7 @@ export class DJBooth {
     crossFader.position.set(0, 0.03, 0.15);
     mixerGroup.add(crossFader);
 
-    mixerGroup.position.set(0, BOOTH_Y + 1.02, BOOTH_CENTER_Z);
+    mixerGroup.position.set(0, BOOTH_Y + BOOTH_H + 0.02, BOOTH_CENTER_Z);
     this.group.add(mixerGroup);
   }
 
@@ -330,7 +378,7 @@ export class DJBooth {
     laptopGroup.add(screenBack);
 
     // Position laptop behind the mixer, tilted toward DJ
-    laptopGroup.position.set(0, BOOTH_Y + 1.05, BOOTH_CENTER_Z + 0.35);
+    laptopGroup.position.set(0, BOOTH_Y + BOOTH_H + 0.05, BOOTH_CENTER_Z + 0.4);
     this.group.add(laptopGroup);
   }
 
@@ -556,7 +604,7 @@ export class DJBooth {
 
     // Position avatar behind the booth, standing on the stage
     // Avatar center (torso) Y: stage + booth height + some offset so hands reach the decks
-    avatarGroup.position.set(0, BOOTH_Y + 1.6, BOOTH_CENTER_Z + 0.6);
+    avatarGroup.position.set(0, BOOTH_Y + BOOTH_H + 0.5, BOOTH_CENTER_Z + 0.7);
     this.group.add(avatarGroup);
   }
 
@@ -760,6 +808,7 @@ export class DJBooth {
     // Dispose canvas textures
     if (this.laptopTexture) this.laptopTexture.dispose();
     this.cdjCanvases.forEach(c => c.texture.dispose());
+    if (this.ledPanels) this.ledPanels.forEach(p => p.texture.dispose());
 
     this.group.traverse(child => {
       if (child.geometry) child.geometry.dispose();
@@ -776,37 +825,59 @@ export class DJBooth {
   }
 
   // ------------------------------------------------------------------
-  //  DJ Booth LED facade animation
+  //  DJ Booth wrap-around LED panels — video + fallback color wash
   // ------------------------------------------------------------------
   updateFacade(time, energy) {
-    if (!this.facadePanel) return;
-    const { canvas, ctx, texture } = this.facadePanel;
-    const w = canvas.width;
-    const h = canvas.height;
+    if (!this.ledPanels || this.ledPanels.length === 0) return;
 
-    // Dark base
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, w, h);
+    // Check if shared video is ready
+    const videoReady = this._ledVideoReady &&
+                       this._ledVideo &&
+                       !this._ledVideo.paused &&
+                       this._ledVideo.readyState >= 2;
 
-    // Audio-reactive color wash
-    const hue = ((time * 40) + 200) % 360;
-    const lum = 15 + energy * 35 + this.beatImpact * 20;
-    ctx.fillStyle = `hsl(${hue}, 80%, ${lum}%)`;
-    ctx.fillRect(0, 0, w, h);
-
-    // Center glow pulse
-    const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
-    grad.addColorStop(0, `hsla(${(hue + 60) % 360}, 90%, ${30 + energy * 30}%, 0.6)`);
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Beat flash
-    if (this.beatImpact > 0.3) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${this.beatImpact * 0.3})`;
-      ctx.fillRect(0, 0, w, h);
+    // Try to start video if paused
+    if (this._ledVideo && this._ledVideo.paused) {
+      this._ledVideo.play().catch(() => {});
     }
 
-    texture.needsUpdate = true;
+    for (let p = 0; p < this.ledPanels.length; p++) {
+      const { canvas, ctx, texture } = this.ledPanels[p];
+      const w = canvas.width;
+      const h = canvas.height;
+
+      if (videoReady) {
+        // Draw video frame onto LED panel
+        ctx.drawImage(this._ledVideo, 0, 0, w, h);
+
+        // Beat flash overlay
+        if (this.beatImpact > 0.3) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${this.beatImpact * 0.15})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+      } else {
+        // Fallback: audio-reactive color wash until video loads
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(0, 0, w, h);
+
+        const hue = ((time * 40) + 200 + p * 60) % 360;
+        const lum = 15 + energy * 35 + this.beatImpact * 20;
+        ctx.fillStyle = `hsl(${hue}, 80%, ${lum}%)`;
+        ctx.fillRect(0, 0, w, h);
+
+        const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
+        grad.addColorStop(0, `hsla(${(hue + 60) % 360}, 90%, ${30 + energy * 30}%, 0.6)`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        if (this.beatImpact > 0.3) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${this.beatImpact * 0.3})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+      }
+
+      texture.needsUpdate = true;
+    }
   }
 }

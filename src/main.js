@@ -144,7 +144,12 @@ async function init() {
   updateLoading(50, 'Creating DJ booth...');
 
   // Phase 3: DJ Booth
-  djBooth = new DJBooth(scene, { stone: cathedralTextures.wall, fabric: fabricTexture }, Q);
+  djBooth = new DJBooth(scene, { fabric: fabricTexture }, Q);
+
+  // Share the stage LED video element with the DJ booth wrap-around screens
+  if (stage._ledVideo) {
+    djBooth.setVideoElement(stage._ledVideo);
+  }
 
   updateLoading(55, 'Programming lights...');
 
