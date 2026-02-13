@@ -107,7 +107,9 @@ const QUALITY_CONFIGS = {
     ledCanvasRes: 64,                  // 64x64 instead of 128
     ledUpdateInterval: 3,              // update every 3rd frame
     fixtureScreens: false,             // no mini-screens on fixture heads
-    beamCoreEnabled: false,            // skip inner beam cores (saves 16 cones)
+    beamCoreEnabled: false,            // skip inner beam cores
+    beamConesEnabled: false,           // skip ALL beam cones (saves 16+ additive-blend draw calls)
+    stageFixtureModels: false,         // skip visual fixture models on trusses
     fogMachines: false,
 
     // Sound System
@@ -149,17 +151,18 @@ const QUALITY_CONFIGS = {
     djScreenUpdates: false,            // static screens
     djAvatarDetail: 'simple',
 
-    // Lighting
-    maxLights: 20,                     // hard cap — reduced from 30
+    // Lighting — aggressive reduction for Quest 3 Adreno GPU
+    // SpotLights are VERY expensive: each costs ~4x a PointLight on mobile GPUs
+    maxLights: 12,                     // hard cap
     stainedGlassLights: false,         // save 16 PointLights
-    naveFillLights: 2,                 // reduced from 5
-    ambientIntensity: 0.6,             // bump ambient to compensate for fewer lights
-    hemisphereIntensity: 0.5,
-    frontTrussSpots: 4,                // reduced from 8
-    sideTrussSpots: 4,                 // reduced from 8 (2 per side)
-    parWashes: 4,                      // reduced from 8
-    laserSpots: 2,                     // reduced from 4
-    strobes: 2,                        // reduced from 6
+    naveFillLights: 1,                 // reduced from 5
+    ambientIntensity: 0.7,             // higher ambient compensates for fewer lights
+    hemisphereIntensity: 0.55,
+    frontTrussSpots: 2,                // reduced from 8 (only 2 SpotLights)
+    sideTrussSpots: 2,                 // reduced from 8 (1 per side)
+    parWashes: 2,                      // reduced from 8 (PointLights, cheaper)
+    laserSpots: 0,                     // disabled — saves 2 SpotLights
+    strobes: 1,                        // reduced from 6
 
     // Update throttling
     organUpdateEvery: 4,

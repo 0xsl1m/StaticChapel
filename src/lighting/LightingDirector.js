@@ -785,22 +785,29 @@ export class LightingDirector {
     for (const par of this.parWashes) par.intensity = 0;
     for (const strobe of this.strobes) strobe.intensity = 0;
 
-    // One strong backlight aimed at DJ
-    const backlight = this.frontTrussSpots[4];
-    backlight.color.copy(COL.white);
-    backlight.intensity = 2.5;
-    backlight.target.position.set(0, 0, 24);
+    // One strong backlight aimed at DJ (use middle or last available spot)
+    const backlightIdx = Math.min(4, this.frontTrussSpots.length - 1);
+    if (backlightIdx >= 0) {
+      const backlight = this.frontTrussSpots[backlightIdx];
+      backlight.color.copy(COL.white);
+      backlight.intensity = 2.5;
+      backlight.target.position.set(0, 0, 24);
+    }
 
     // Faint purple rim from one side truss aimed at DJ
-    this.sideTrussSpots[0].color.copy(COL.purple);
-    this.sideTrussSpots[0].intensity = 0.3;
-    this.sideTrussSpots[0].target.position.set(0, 0, 24);
+    if (this.sideTrussSpots.length > 0) {
+      this.sideTrussSpots[0].color.copy(COL.purple);
+      this.sideTrussSpots[0].intensity = 0.3;
+      this.sideTrussSpots[0].target.position.set(0, 0, 24);
+    }
 
     // One faint laser for drama
-    this.laserSpots[0].color.copy(COL.purple);
-    this.laserSpots[0].intensity = 0.5 + Math.sin(time * 2) * 0.2;
-    this.laserSpots[0].target.position.set(this.laserSpots[0].position.x, 28, this.laserSpots[0].position.z);
-    for (let i = 1; i < this.laserSpots.length; i++) this.laserSpots[i].intensity = 0;
+    if (this.laserSpots.length > 0) {
+      this.laserSpots[0].color.copy(COL.purple);
+      this.laserSpots[0].intensity = 0.5 + Math.sin(time * 2) * 0.2;
+      this.laserSpots[0].target.position.set(this.laserSpots[0].position.x, 28, this.laserSpots[0].position.z);
+      for (let i = 1; i < this.laserSpots.length; i++) this.laserSpots[i].intensity = 0;
+    }
   }
 
   // =========================================================================
@@ -947,15 +954,21 @@ export class LightingDirector {
 
     // On beat: flash center spot down the nave and strobes
     if (isBeat) {
-      const center = this.frontTrussSpots[4];
-      center.color.copy(COL.white);
-      center.intensity = 4.0;
-      center.target.position.set(0, 0, 0);
+      const centerIdx = Math.min(4, this.frontTrussSpots.length - 1);
+      if (centerIdx >= 0) {
+        const center = this.frontTrussSpots[centerIdx];
+        center.color.copy(COL.white);
+        center.intensity = 4.0;
+        center.target.position.set(0, 0, 0);
+      }
 
-      this.strobes[2].color.copy(COL.white);
-      this.strobes[2].intensity = 6.0;
-      this.strobes[3].color.copy(COL.white);
-      this.strobes[3].intensity = 6.0;
+      for (let si = 0; si < Math.min(2, this.strobes.length); si++) {
+        const sIdx = Math.min(si + 2, this.strobes.length - 1);
+        if (sIdx >= 0) {
+          this.strobes[sIdx].color.copy(COL.white);
+          this.strobes[sIdx].intensity = 6.0;
+        }
+      }
     }
   }
 

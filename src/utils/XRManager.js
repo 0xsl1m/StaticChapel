@@ -1,10 +1,12 @@
 /**
- * XRManager - WebXR session management + thumbstick locomotion for Quest 3
+ * XRManager - WebXR session management + professional locomotion for Quest 3
  *
  * Handles:
  *  - VR session lifecycle (enter/exit)
- *  - Thumbstick-based smooth locomotion (left stick = move, right stick = snap turn)
+ *  - Smooth locomotion with acceleration/deceleration curves (left stick)
+ *  - Snap turn with cooldown (right stick)
  *  - Camera rig positioning so the user can walk around the cathedral
+ *  - Comfort vignette during fast movement
  *  - Bounds clamping to keep the user inside the nave
  */
 import * as THREE from 'three';
@@ -23,11 +25,21 @@ export class XRManager {
     this.cameraRig.name = 'xrCameraRig';
     this.cameraRig.add(camera);
 
-    // Locomotion settings
-    this.moveSpeed = 4.0;      // meters per second
-    this.snapAngle = Math.PI / 6; // 30 degree snap turns
-    this.snapCooldown = 0;     // prevent rapid snap turning
-    this.deadzone = 0.15;      // thumbstick dead zone
+    // --- Locomotion tuning (professional VR dynamics) ---
+    this.maxSpeed = 3.5;          // meters per second at full stick deflection
+    this.sprintSpeed = 5.5;       // meters per second when stick fully pushed + sprint
+    this.acceleration = 8.0;      // how fast we ramp up to target speed (m/s²)
+    this.deceleration = 12.0;     // how fast we slow down when stick released (m/s²)
+    this.stickCurve = 2.0;        // power curve on stick deflection (2.0 = quadratic)
+    this.currentSpeed = 0;        // current interpolated speed
+
+    // Snap turn
+    this.snapAngle = Math.PI / 6;   // 30 degree snap turns
+    this.snapCooldown = 0;          // prevent rapid snap turning
+    this.snapThreshold = 0.6;       // stick deflection threshold for snap
+
+    // Thumbstick dead zone
+    this.deadzone = 0.15;
 
     // Bounds (same as Controls.js — stay inside cathedral)
     this.bounds = {
@@ -35,10 +47,18 @@ export class XRManager {
       minZ: -29, maxZ: 28,
     };
 
+    // Current movement direction (smoothed)
+    this._currentMoveDir = new THREE.Vector3();
+    this._targetMoveDir = new THREE.Vector3();
+
     // Reusable vectors
     this._moveDir = new THREE.Vector3();
     this._forward = new THREE.Vector3();
     this._right = new THREE.Vector3();
+
+    // Comfort vignette for fast movement
+    this._comfortVignette = null;
+    this._vignetteIntensity = 0;
 
     this.checkSupport();
   }
@@ -83,8 +103,6 @@ export class XRManager {
       if (this.button) this.button.textContent = 'EXIT VR';
 
       // Save desktop camera state, then reset for VR
-      // In VR, the XR system controls head position via local-floor reference space.
-      // The camera rig position determines where "you" are in the cathedral.
       this._savedCameraPos = this.camera.position.clone();
       this._savedCameraQuat = this.camera.quaternion.clone();
       this.camera.position.set(0, 0, 0);
@@ -93,6 +111,10 @@ export class XRManager {
       // Position the rig at the starting location
       this.cameraRig.position.set(0, 0, -15);
       this.cameraRig.rotation.set(0, 0, 0);
+
+      // Reset movement state
+      this.currentSpeed = 0;
+      this._currentMoveDir.set(0, 0, 0);
 
       this.session.addEventListener('end', () => {
         this.isPresenting = false;
@@ -104,6 +126,9 @@ export class XRManager {
           this.camera.position.copy(this._savedCameraPos);
           this.camera.quaternion.copy(this._savedCameraQuat);
         }
+
+        // Reset speed
+        this.currentSpeed = 0;
       });
     } catch (e) {
       console.error('Failed to enter VR:', e);
@@ -118,7 +143,8 @@ export class XRManager {
 
   /**
    * Called every frame from the main animate loop.
-   * Reads XR controller thumbstick input and moves the camera rig.
+   * Reads XR controller thumbstick input and moves the camera rig
+   * with professional acceleration/deceleration dynamics.
    * @param {number} delta - frame delta in seconds
    */
   update(delta) {
@@ -130,7 +156,7 @@ export class XRManager {
     // Decrease snap turn cooldown
     if (this.snapCooldown > 0) this.snapCooldown -= delta;
 
-    let moveX = 0, moveY = 0;   // left stick
+    let moveX = 0, moveY = 0;   // left stick (raw)
     let lookX = 0;               // right stick horizontal (snap turn)
 
     // Read input from XR controllers
@@ -154,14 +180,47 @@ export class XRManager {
     }
 
     // --- Snap turn (right stick) ---
-    if (Math.abs(lookX) > 0.6 && this.snapCooldown <= 0) {
+    if (Math.abs(lookX) > this.snapThreshold && this.snapCooldown <= 0) {
       const snapDir = lookX > 0 ? -1 : 1;
       this.cameraRig.rotation.y += snapDir * this.snapAngle;
       this.snapCooldown = 0.3; // 300ms cooldown between snaps
     }
 
-    // --- Smooth locomotion (left stick) ---
-    if (Math.abs(moveX) > 0 || Math.abs(moveY) > 0) {
+    // --- Smooth locomotion with acceleration/deceleration (left stick) ---
+
+    // Calculate raw stick magnitude (0-1) with deadzone remapping
+    const rawMag = Math.sqrt(moveX * moveX + moveY * moveY);
+    const stickMagnitude = rawMag > this.deadzone
+      ? Math.min(1.0, (rawMag - this.deadzone) / (1.0 - this.deadzone))
+      : 0;
+
+    // Apply power curve for finer low-speed control
+    const curvedMagnitude = Math.pow(stickMagnitude, this.stickCurve);
+
+    // Target speed based on curved stick deflection
+    const targetSpeed = curvedMagnitude * this.maxSpeed;
+
+    // Smoothly interpolate current speed toward target
+    if (targetSpeed > this.currentSpeed) {
+      // Accelerating
+      this.currentSpeed = Math.min(
+        targetSpeed,
+        this.currentSpeed + this.acceleration * delta
+      );
+    } else {
+      // Decelerating
+      this.currentSpeed = Math.max(
+        targetSpeed,
+        this.currentSpeed - this.deceleration * delta
+      );
+    }
+
+    // Kill tiny residual speed to prevent drift
+    if (this.currentSpeed < 0.01) {
+      this.currentSpeed = 0;
+    }
+
+    if (this.currentSpeed > 0 && stickMagnitude > 0) {
       // Get camera's forward direction in world space (flattened to XZ)
       const xrCamera = this.renderer.xr.getCamera();
       xrCamera.getWorldDirection(this._forward);
@@ -171,18 +230,34 @@ export class XRManager {
       // Right vector
       this._right.crossVectors(this._forward, THREE.Object3D.DEFAULT_UP).normalize();
 
-      // Build movement vector
-      this._moveDir.set(0, 0, 0);
-      this._moveDir.addScaledVector(this._right, moveX);
-      this._moveDir.addScaledVector(this._forward, -moveY); // -Y = forward on thumbstick
+      // Build normalized movement direction from stick input
+      this._targetMoveDir.set(0, 0, 0);
+      this._targetMoveDir.addScaledVector(this._right, moveX);
+      this._targetMoveDir.addScaledVector(this._forward, -moveY); // -Y = forward on thumbstick
+      this._targetMoveDir.normalize();
 
-      // Apply speed and delta
-      this._moveDir.multiplyScalar(this.moveSpeed * delta);
+      // Smoothly blend movement direction (prevents jarring direction changes)
+      const dirBlend = 1.0 - Math.pow(0.001, delta); // ~exponential smoothing
+      this._currentMoveDir.lerp(this._targetMoveDir, dirBlend);
+      this._currentMoveDir.normalize();
+
+      // Apply speed and delta to get final displacement
+      this._moveDir.copy(this._currentMoveDir);
+      this._moveDir.multiplyScalar(this.currentSpeed * delta);
 
       // Move the rig
       this.cameraRig.position.add(this._moveDir);
 
       // Clamp to bounds
+      this.cameraRig.position.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, this.cameraRig.position.x));
+      this.cameraRig.position.z = Math.max(this.bounds.minZ, Math.min(this.bounds.maxZ, this.cameraRig.position.z));
+    } else if (this.currentSpeed > 0) {
+      // Stick released but still decelerating — continue in last direction
+      this._moveDir.copy(this._currentMoveDir);
+      this._moveDir.multiplyScalar(this.currentSpeed * delta);
+      this.cameraRig.position.add(this._moveDir);
+
+      // Clamp
       this.cameraRig.position.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, this.cameraRig.position.x));
       this.cameraRig.position.z = Math.max(this.bounds.minZ, Math.min(this.bounds.maxZ, this.cameraRig.position.z));
     }

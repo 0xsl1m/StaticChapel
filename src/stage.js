@@ -64,7 +64,9 @@ export class ConcertStage {
   build() {
     this.createLEDWall();
     this.createTrusses();
-    this.createLightFixtures();
+    if (this.Q.stageFixtureModels !== false) {
+      this.createLightFixtures();
+    }
     if (this.Q.fogMachines !== false) {
       this.createFogMachines();
     }
@@ -519,8 +521,10 @@ export class ConcertStage {
     if (energy === undefined) energy = 0;
 
     this.updateLEDPanels(time, bandValues, energy);
-    this.updateFixtures(time, bandValues, energy);
-    this.updateFixtureScreens(time, energy);
+    if (this.fixtures.length > 0) {
+      this.updateFixtures(time, bandValues, energy);
+      this.updateFixtureScreens(time, energy);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -844,10 +848,10 @@ export class ConcertStage {
         let spot = null;
         if (fixture.side === 'front' && fixture.index < ld.frontTrussSpots.length) {
           spot = ld.frontTrussSpots[fixture.index];
-        } else if (fixture.side === 'left' && fixture.index < 4) {
+        } else if (fixture.side === 'left' && fixture.index < Math.floor(ld.sideTrussSpots.length / 2)) {
           spot = ld.sideTrussSpots[fixture.index];
-        } else if (fixture.side === 'right' && fixture.index < 4) {
-          spot = ld.sideTrussSpots[fixture.index + 4];
+        } else if (fixture.side === 'right' && fixture.index < Math.floor(ld.sideTrussSpots.length / 2)) {
+          spot = ld.sideTrussSpots[fixture.index + Math.floor(ld.sideTrussSpots.length / 2)];
         }
 
         if (spot) {
