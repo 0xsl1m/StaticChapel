@@ -148,6 +148,7 @@ export class GodRays {
           mesh,
           baseOpacity,
           side, // -1 = left wall, +1 = right wall
+          windowIndex: i, // 0-7, back to front
           phaseOffset: Math.random() * Math.PI * 2
         });
       }
@@ -161,33 +162,47 @@ export class GodRays {
    *   -1 = sun on right (light enters left windows), +1 = sun on left (light enters right windows)
    */
   update(time, energy = 0) {
-    // Sun cycle: full cycle every ~5 minutes (300s)
-    // sin goes -1 → +1: negative = sun on right (left windows lit), positive = sun on left (right windows lit)
-    const sunCycle = Math.sin(time * (Math.PI * 2 / 300));
+    // Sun arc: sweeps across the cathedral over ~4 minutes (240s)
+    // sunAngle goes 0 → 2PI continuously
+    const sunAngle = (time * Math.PI * 2 / 240) % (Math.PI * 2);
 
-    // sunSide: which wall's windows are lit
-    // sunCycle < 0 → sun is east/right → light enters LEFT windows (side=-1)
-    // sunCycle > 0 → sun is west/left → light enters RIGHT windows (side=+1)
-    this.sunSide = sunCycle < 0 ? -1 : 1;
+    // Side: sin determines which wall gets light
+    // sin < 0 → sun on right → left windows lit (side=-1)
+    // sin > 0 → sun on left → right windows lit (side=+1)
+    const sideFactor = Math.sin(sunAngle);
+    this.sunSide = sideFactor < 0 ? -1 : 1;
+    const sideStrength = Math.min(1.0, Math.abs(sideFactor) * 2.5);
 
-    // How strongly the sun is on one side (0 = overhead, 1 = fully to one side)
-    // Use abs(sunCycle) but with a smooth ramp so the transition isn't instant
-    const sunStrength = Math.min(1.0, Math.abs(sunCycle) * 3.0); // reaches full at ~0.33
+    // Sun Z-position: cosine sweeps the sunbeam along the nave (back to front)
+    // This determines WHICH windows along the wall are in direct sunlight
+    // Normalized 0-1 range across the 8 window positions
+    const sunZ = Math.cos(sunAngle) * 0.5 + 0.5; // 0 = back wall, 1 = front
 
     for (let i = 0; i < this.shafts.length; i++) {
       const s = this.shafts[i];
-      const breath = 0.6 + 0.4 * Math.sin(time * 0.4 + s.phaseOffset);
-      const audioDim = 1.0 - energy * 0.6;
 
-      // Sun side factor: 1.0 if this shaft's side matches the lit side, fades to 0 otherwise
-      let sunFactor;
+      // Slow breathing variation per shaft
+      const breath = 0.7 + 0.3 * Math.sin(time * 0.3 + s.phaseOffset);
+
+      // Audio dims the rays when music is loud
+      const audioDim = 1.0 - energy * 0.7;
+
+      // Side factor: lit side gets light, opposite side goes dark
+      let sideMult;
       if (s.side === this.sunSide) {
-        sunFactor = sunStrength;  // lit side: ramps up as sun moves further to that side
+        sideMult = sideStrength;
       } else {
-        sunFactor = 1.0 - sunStrength; // opposite side: fades out
+        sideMult = (1.0 - sideStrength) * 0.05; // nearly off on shadow side
       }
 
-      const targetOpacity = s.baseOpacity * breath * audioDim * sunFactor;
+      // Window position factor: only 2-3 windows near the sun's Z-position get light
+      // s.windowIndex is 0-7 (back to front), normalized to 0-1
+      const windowPos = s.windowIndex / 7;
+      const distFromSun = Math.abs(windowPos - sunZ);
+      // Tight falloff: bright within ±0.15 (~1-2 windows), dark beyond
+      const spotFactor = Math.exp(-distFromSun * distFromSun * 40.0);
+
+      const targetOpacity = s.baseOpacity * breath * audioDim * sideMult * spotFactor;
       s.mesh.material.opacity = Math.min(0.22, Math.max(0.0, targetOpacity));
     }
 
