@@ -693,9 +693,9 @@ export class ClubDecor {
       returnSofa.rotation.y = Math.PI / 2;
       returnSofa.position.set(longW / 2 - depth / 2, 0, -(shortW / 2 - depth / 2));
       g.add(returnSofa);
-      // Coffee table in the L's inner corner (between long sofa and return)
+      // Coffee table in the L's open area (in front of long sofa, beside return)
       const ct = this._buildCoffeeTable(1.0, 0.6, M);
-      ct.position.set(longW / 4, 0, -(shortW / 2));
+      ct.position.set(0, 0, -(depth / 2 + 0.4));
       g.add(ct);
       // End table at far end of long sofa
       const et = this._buildEndTable(M);
