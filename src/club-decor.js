@@ -285,9 +285,9 @@ export class ClubDecor {
         ), pilX, alcoveBaseY + alcoveH + 0.15, alcoveZ + 0.04));
       }
 
-      // Moon phase disc — symmetrical: center=full, mirror outward
-      // Alcoves 0-6 → phases: waning crescent, third quarter, waning gibbous,
-      //   FULL, waxing gibbous, first quarter, waxing crescent
+      // Moon phase: bright disc + dark overlay disc to carve the shadow
+      // Symmetrical: center=full, mirror outward
+      // L→R: waning crescent, 3rd quarter, waning gibbous, FULL, waxing gibbous, 1st quarter, waxing crescent
       const moonR = alcoveW / 2 - 0.25;
       const moonY = alcoveBaseY + alcoveH + moonR * 0.5;
       const moonZ = alcoveZ + 0.08;
@@ -295,63 +295,57 @@ export class ClubDecor {
         color: 0xf0e8d0, roughness: 0.3, metalness: 0.6,
         emissive: 0xf0e8d0, emissiveIntensity: 0.06,
       });
+      const shadowMat = new THREE.MeshStandardMaterial({
+        color: 0x0a0a0e, roughness: 0.8, metalness: 0.0,
+      });
 
-      // Build moon phase shape. The lit portion is drawn as a closed shape:
-      //   - One semicircular arc on the outer lit edge
-      //   - One elliptical arc for the terminator (shadow boundary)
-      // terminatorX: 1.0=full circle, 0=half, -1.0=new moon (no light)
-      // litSide: +1=right side lit (waxing), -1=left side lit (waning)
-      const buildMoonPhase = (alcoveIdx, r) => {
-        const seg = 32;
-        if (alcoveIdx === 3) return new THREE.CircleGeometry(r, seg); // full
+      // Full bright disc (always present as base)
+      const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(moonR, 32), moonMat);
+      moonDisc.position.set(ax, moonY, moonZ);
+      bar.add(moonDisc);
 
-        // Map alcove index to lit-side and terminator width
-        // 0: waning crescent  → left lit,  terminator=-0.45 (thin sliver)
-        // 1: third quarter    → left lit,  terminator= 0    (half moon)
-        // 2: waning gibbous   → left lit,  terminator= 0.55 (mostly lit)
-        // 4: waxing gibbous   → right lit, terminator= 0.55
-        // 5: first quarter    → right lit, terminator= 0
-        // 6: waxing crescent  → right lit, terminator=-0.45
-        const phases = [
-          { lit: -1, t: -0.45 }, // 0: waning crescent
-          { lit: -1, t:  0.0  }, // 1: third quarter
-          { lit: -1, t:  0.55 }, // 2: waning gibbous
-          null,                   // 3: full (handled above)
-          { lit:  1, t:  0.55 }, // 4: waxing gibbous
-          { lit:  1, t:  0.0  }, // 5: first quarter
-          { lit:  1, t: -0.45 }, // 6: waxing crescent
-        ];
-        const p = phases[alcoveIdx];
-        const shape = new THREE.Shape();
+      // Shadow overlay — offset and scaled to create each phase
+      // Shadow is a slightly larger disc placed in front, shifted left or right.
+      // shadowX: offset from center. Positive = shadow moves right (waning).
+      // shadowScale: x-scale of shadow disc. 1.0=full circle, <1=elliptical.
+      //
+      // Phase 0 (waning crescent): shadow nearly centered, thin sliver of light on LEFT
+      // Phase 1 (third quarter):   shadow offset right, LEFT half lit
+      // Phase 2 (waning gibbous):  shadow far right, mostly lit except right edge
+      // Phase 3 (full):            no shadow
+      // Phase 4 (waxing gibbous):  shadow far left, mostly lit except left edge
+      // Phase 5 (first quarter):   shadow offset left, RIGHT half lit
+      // Phase 6 (waxing crescent): shadow nearly centered, thin sliver of light on RIGHT
+      if (a !== 3) {
+        const sr = moonR * 1.01; // slightly larger to fully cover edges
+        const shadow = new THREE.Mesh(new THREE.CircleGeometry(sr, 32), shadowMat);
+        shadow.position.set(ax, moonY, moonZ + 0.003);
 
-        // Outer arc: semicircle on the lit side
-        // lit=+1 (right): arc sweeps from bottom (-PI/2) to top (PI/2)
-        // lit=-1 (left):  arc sweeps from top (PI/2+PI) to bottom (-PI/2+PI) i.e. PI/2 to 3PI/2
-        const startAngle = p.lit > 0 ? -Math.PI / 2 : Math.PI / 2;
-        for (let i = 0; i <= seg; i++) {
-          const angle = startAngle + (Math.PI * i) / seg;
-          const x = Math.cos(angle) * r;
-          const y = Math.sin(angle) * r;
-          if (i === 0) shape.moveTo(x, y);
-          else shape.lineTo(x, y);
+        if (a === 0) {
+          // Waning crescent: shadow slightly left of center, thin left sliver visible
+          shadow.position.x = ax - moonR * 0.25;
+        } else if (a === 1) {
+          // Third quarter: shadow covers right half
+          shadow.position.x = ax + moonR * 0.5;
+          shadow.scale.x = 1.0;
+        } else if (a === 2) {
+          // Waning gibbous: shadow on right edge only
+          shadow.position.x = ax + moonR * 0.85;
+          shadow.scale.x = 0.7;
+        } else if (a === 4) {
+          // Waxing gibbous: shadow on left edge only (mirror of 2)
+          shadow.position.x = ax - moonR * 0.85;
+          shadow.scale.x = 0.7;
+        } else if (a === 5) {
+          // First quarter: shadow covers left half (mirror of 1)
+          shadow.position.x = ax - moonR * 0.5;
+          shadow.scale.x = 1.0;
+        } else if (a === 6) {
+          // Waxing crescent: shadow slightly right of center, thin right sliver visible (mirror of 0)
+          shadow.position.x = ax + moonR * 0.25;
         }
-        // Terminator arc: elliptical, closes back to start
-        // Sweeps in the opposite direction along the shadow boundary
-        // terminatorX = cos(angle) * r * t  (t controls how far the terminator reaches)
-        for (let i = 0; i <= seg; i++) {
-          // Reverse direction from where outer arc ended back to start
-          const angle = startAngle + Math.PI - (Math.PI * i) / seg;
-          const x = Math.cos(angle) * r * p.t;
-          const y = Math.sin(angle) * r;
-          shape.lineTo(x, y);
-        }
-        return new THREE.ShapeGeometry(shape);
-      };
-
-      const moonGeo = buildMoonPhase(a, moonR);
-      const moonMesh = new THREE.Mesh(moonGeo, moonMat);
-      moonMesh.position.set(ax, moonY, moonZ);
-      bar.add(moonMesh);
+        bar.add(shadow);
+      }
 
       // Gold arch trim ring
       bar.add(place(new THREE.Mesh(
